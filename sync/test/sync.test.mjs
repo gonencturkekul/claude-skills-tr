@@ -205,3 +205,57 @@ test('check-upstream treats an unknown documentedCommit as every plugin file cha
   assert.equal(out.changed, true);
   assert.deepEqual(out.changedFiles, ['plugin/.claude-plugin/plugin.json', 'plugin/skills/impeccable/scripts/command-metadata.json']);
 });
+
+// ---- build-site-data ----
+import { buildSiteData, serialize, markdownToHtml } from '../build-site-data.mjs';
+
+test('buildSiteData produces the install and add commands', () => {
+  const data = buildSiteData(makeMarketplace(ALL));
+  assert.equal(data.marketplace.name, 'skills-tr');
+  assert.equal(data.marketplace.addCommand, '/plugin marketplace add gonencturkekul/claude-skills-tr');
+  assert.equal(data.skills[0].installCommand, '/plugin install impeccable@skills-tr');
+  assert.equal(data.skills[0].author, 'Paul Bakaus');
+  assert.equal(data.skills[0].repoUrl, 'https://github.com/pbakaus/impeccable');
+  assert.equal(data.skills[0].commands.length, 24);
+});
+
+test('buildSiteData keeps Turkish characters and renders inline code', () => {
+  const dir = makeMarketplace(ALL);
+  writeFileSync(join(dir, 'docs', 'tr', 'impeccable', 'polish.md'), summary('polish', '`polish` ve ığşçöüİ'));
+  const cmd = buildSiteData(dir).skills[0].commands.find((c) => c.command === 'polish');
+  assert.match(cmd.html, /<code>polish<\/code>/);
+  assert.match(cmd.html, /ığşçöüİ/);
+  assert.equal(cmd.title, 'Başlık');
+});
+
+test('markdownToHtml escapes raw HTML', () => {
+  const html = markdownToHtml('<script>alert(1)</script> & "x"');
+  assert.doesNotMatch(html, /<script>/);
+  assert.match(html, /&lt;script&gt;/);
+});
+
+test('markdownToHtml renders headings, lists, fenced code and safe links', () => {
+  const html = markdownToHtml('## Ne yapar\n\nMetin.\n\n- bir\n- iki\n\n```\n/impeccable polish <x>\n```\n\n[repo](https://github.com/a/b) [kötü](javascript:alert(1))');
+  assert.match(html, /<h3>Ne yapar<\/h3>/);
+  assert.match(html, /<ul><li>bir<\/li><li>iki<\/li><\/ul>/);
+  assert.match(html, /<pre><code>\/impeccable polish &lt;x&gt;<\/code><\/pre>/);
+  assert.match(html, /<a href="https:\/\/github.com\/a\/b"[^>]*>repo<\/a>/);
+  assert.doesNotMatch(html, /href="javascript/);
+});
+
+test('buildSiteData is deterministic', () => {
+  const dir = makeMarketplace(ALL);
+  assert.equal(serialize(buildSiteData(dir)), serialize(buildSiteData(dir)));
+});
+
+test('validate --site passes when data.json is fresh and fails when stale', () => {
+  const dir = makeMarketplace(ALL);
+  const site = tmp();
+  mkdirSync(join(site, 'skills'));
+  writeFileSync(join(site, 'skills', 'data.json'), serialize(buildSiteData(dir)));
+  assert.equal(run('validate.mjs', ['--repo', dir, '--site', site]).status, 0);
+  writeFileSync(join(site, 'skills', 'data.json'), '{}');
+  const r = run('validate.mjs', ['--repo', dir, '--site', site]);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /stale/);
+});
