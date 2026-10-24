@@ -11,11 +11,14 @@
 //   --head: only for a checkout WITHOUT git history (tarball fallback). Pass
 //   the full 40-char head SHA from the GitHub API; git is then not used at all.
 // Output (stdout, JSON):
-//   { skill, changed, headCommit, version, changedFiles, addedCommands,
-//     removedCommands, missingSources }
-//   changedFiles are repo-relative paths under the skill's plugin folder.
-//   missingSources lists summaries ({ command, source }) whose `source` file
-//   no longer exists upstream (commands in removedCommands are left out).
+//   { skill, kind, changed, headCommit, version, changedFiles, addedItems,
+//     removedItems, missingSources }
+//   Items are commands for kind "commands" (impeccable) and reference topics
+//   (references/<id>.md) for kind "guide" (taste-skill); see KINDS in lib.mjs.
+//   changedFiles are repo-relative paths under the skill's watched folder
+//   (`watchPath` in sync/upstream.json, default: the plugin folder `path`).
+//   missingSources lists summaries ({ item, source }) whose `source` file no
+//   longer exists upstream (items in removedItems are left out).
 // Exit codes: 0 = ok, 2 = "shape-change" (upstream layout no longer matches;
 //   the routine must stop and open an issue), 1 = any other error.
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -23,8 +26,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
-  DEFAULT_REPO, FULL_SHA, ShapeError, checkLicense, findSkill, listCommands, parseArgs, parseFrontmatter, paths,
-  readJson, upstreamFiles,
+  DEFAULT_REPO, FULL_SHA, ShapeError, findSkill, parseArgs, parseFrontmatter, paths, readUpstream,
 } from './lib.mjs';
 
 const USAGE = 'usage: node sync/check-upstream.mjs --skill <name> --upstream <checkoutDir> [--head <sha>] [--repo <marketplaceDir>]';
@@ -49,16 +51,16 @@ function walk(root, dir) {
 // Why: a moved or deleted source never shows up as "this summary's file
 // changed", so without this list the summary would silently describe a file
 // that no longer exists. The routine must find where the content went.
-function findMissingSources(repo, skill, checkoutDir, skip) {
+// `source` is relative to the skill folder (the one holding SKILL.md).
+function findMissingSources(repo, skill, skillDir, skip) {
   const docsDir = paths(repo).docs(skill.name);
   if (!existsSync(docsDir)) return [];
-  const skillDir = join(checkoutDir, skill.path, 'skills', skill.name);
   const missing = [];
   for (const file of readdirSync(docsDir).filter((f) => f.endsWith('.md') && f !== 'README.md').sort()) {
-    const command = file.slice(0, -3);
-    if (skip.has(command)) continue;
+    const item = file.slice(0, -3);
+    if (skip.has(item)) continue;
     const { data } = parseFrontmatter(readFileSync(join(docsDir, file), 'utf8'));
-    if (data.source && !existsSync(join(skillDir, data.source))) missing.push({ command, source: data.source });
+    if (data.source && !existsSync(join(skillDir, data.source))) missing.push({ item, source: data.source });
   }
   return missing;
 }
@@ -66,22 +68,23 @@ function findMissingSources(repo, skill, checkoutDir, skip) {
 export function checkUpstream(repo, skillName, checkoutDir, { head } = {}) {
   if (head !== undefined && !FULL_SHA.test(head)) throw new Error(`--head must be a full 40-character commit SHA, got "${head}"`);
   const skill = findSkill(repo, skillName);
-  const files = upstreamFiles(checkoutDir, skill);
-  if (!existsSync(files.pluginDir)) throw new ShapeError(`plugin folder "${skill.path}" not found in upstream`);
-  const commands = listCommands(files.metadata);
-  if (!existsSync(files.pluginJson)) throw new ShapeError(`plugin.json not found at ${files.pluginJson}`);
-  const pluginJson = readJson(files.pluginJson);
-  const version = pluginJson.version ?? null;
-  checkLicense(checkoutDir, skill, pluginJson);
+  // Plugin folder, SKILL.md name, item list, manifest and license; throws
+  // ShapeError when upstream no longer matches sync/upstream.json.
+  const { files, items, version } = readUpstream(checkoutDir, skill);
+  // Which upstream files can affect our summaries. impeccable watches its
+  // whole plugin folder. taste-skill's plugin root is its repo root, which
+  // also holds the README, tests and examples, so it watches only the skill
+  // folder; otherwise every README edit upstream would trigger a doc pass.
+  const watch = skill.watchPath ?? skill.path;
 
   const headCommit = head ?? git(checkoutDir, 'rev-parse', 'HEAD');
   let changedFiles = [];
   if (headCommit !== skill.documentedCommit) {
-    // Only files inside the plugin folder matter: that is what Claude loads and
-    // what our summaries describe. README/site changes upstream are ignored.
+    // Only files inside the watched folder matter: that is what Claude loads
+    // and what our summaries describe. README/site changes upstream are ignored.
     // If the recorded commit no longer exists upstream (history rewritten, or a
     // brand-new skill), or there is no git history at all (--head, tarball),
-    // treat every plugin file as changed: regenerating all summaries is safe,
+    // treat every watched file as changed: regenerating all summaries is safe,
     // guessing a partial diff is not.
     const known = head === undefined
       && spawnSync('git', ['-C', checkoutDir, 'cat-file', '-e', `${skill.documentedCommit}^{commit}`]).status === 0;
@@ -90,33 +93,35 @@ export function checkUpstream(repo, skillName, checkoutDir, { head } = {}) {
       // --no-renames: with rename detection a moved file only shows its new
       // path, so a summary whose `source` is the old path would never be
       // flagged. Listing both the deleted and the added path keeps it visible.
-      list = git(checkoutDir, 'diff', '--no-renames', '--name-only', `${skill.documentedCommit}..HEAD`, '--', skill.path).split('\n');
+      list = git(checkoutDir, 'diff', '--no-renames', '--name-only', `${skill.documentedCommit}..HEAD`, '--', watch).split('\n');
     } else if (head === undefined) {
-      list = git(checkoutDir, 'ls-files', '--', skill.path).split('\n');
+      list = git(checkoutDir, 'ls-files', '--', watch).split('\n');
     } else {
-      list = walk(checkoutDir, files.pluginDir);
+      list = walk(checkoutDir, join(checkoutDir, watch));
     }
     changedFiles = list.filter(Boolean).sort();
   }
 
-  const recorded = new Set(skill.commands ?? []);
-  const removedCommands = [...recorded].filter((c) => !commands.includes(c)).sort();
-  // A real upstream rarely drops more than a couple of commands at once. Losing
-  // over half in one run almost certainly means the metadata changed meaning
-  // (renamed keys, split files), and acting on it would delete most summaries
-  // and publish that without review. Stop and let a human check instead.
-  if (removedCommands.length * 2 > recorded.size) {
-    throw new ShapeError(`${removedCommands.length} of ${recorded.size} recorded commands disappeared upstream at once: ${removedCommands.join(', ')}`);
+  const recorded = new Set(skill.items ?? []);
+  const removedItems = [...recorded].filter((c) => !items.includes(c)).sort();
+  // A real upstream rarely drops more than a couple of commands or topics at
+  // once. Losing over half in one run almost certainly means the metadata or
+  // the references folder changed meaning (renamed keys, split files), and
+  // acting on it would delete most summaries and publish that without review.
+  // Stop and let a human check instead.
+  if (removedItems.length * 2 > recorded.size) {
+    throw new ShapeError(`${removedItems.length} of ${recorded.size} recorded items disappeared upstream at once: ${removedItems.join(', ')}`);
   }
   return {
     skill: skill.name,
+    kind: skill.kind,
     changed: changedFiles.length > 0,
     headCommit,
     version,
     changedFiles,
-    addedCommands: commands.filter((c) => !recorded.has(c)),
-    removedCommands,
-    missingSources: findMissingSources(repo, skill, checkoutDir, new Set(removedCommands)),
+    addedItems: items.filter((c) => !recorded.has(c)),
+    removedItems,
+    missingSources: findMissingSources(repo, skill, files.skillDir, new Set(removedItems)),
   };
 }
 

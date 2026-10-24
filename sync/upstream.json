@@ -2,8 +2,11 @@
   "skills": [
     {
       "name": "impeccable",
+      "kind": "commands",
       "repo": "pbakaus/impeccable",
       "path": "plugin",
+      "skillDir": "plugin/skills/impeccable",
+      "skillName": "impeccable",
       "author": "Paul Bakaus",
       "homepage": "https://impeccable.style",
       "license": "Apache-2.0",
@@ -11,7 +14,7 @@
       "documentedCommit": "dad8dbb3aac21ad1fa236c110315ef4abece23e8",
       "version": "4.7.0",
       "syncedAt": "2026-10-25",
-      "commands": [
+      "items": [
         "adapt",
         "animate",
         "audit",
@@ -36,6 +39,34 @@
         "quieter",
         "shape",
         "typeset"
+      ]
+    },
+    {
+      "name": "taste-skill",
+      "kind": "guide",
+      "repo": "Leonxlnx/taste-skill",
+      "path": ".",
+      "watchPath": "skills/taste-skill",
+      "skillDir": "skills/taste-skill",
+      "skillName": "design-taste-frontend",
+      "author": "Leonxlnx",
+      "homepage": "https://github.com/Leonxlnx/taste-skill",
+      "license": "MIT",
+      "documentedCommit": "6010f91a9935f1c167dfc500fb1a475681892e6b",
+      "version": "2.1.4",
+      "syncedAt": "2026-10-25",
+      "items": [
+        "app-screens",
+        "colour",
+        "copy",
+        "critique",
+        "imagery",
+        "layout",
+        "motion",
+        "research",
+        "scenes",
+        "tells",
+        "type"
       ]
     }
   ]

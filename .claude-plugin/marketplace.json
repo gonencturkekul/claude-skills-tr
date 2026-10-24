@@ -26,6 +26,23 @@
         "url": "https://github.com/pbakaus/impeccable.git",
         "path": "plugin"
       }
+    },
+    {
+      "name": "taste-skill",
+      "description": "Web sayfaları ve uygulama ekranları için sanat yönetmenliği: araştırılmış tasarım yönleri, şablon görüntüden kaçınan kurallar ve gerçek tarayıcıda ölçüm. Yazar: Leonxlnx. Türkçe rehber: https://gonencturkekul.com/skills.html",
+      "author": {
+        "name": "Leonxlnx",
+        "email": "hello@tasteskill.dev"
+      },
+      "homepage": "https://github.com/Leonxlnx/taste-skill",
+      "repository": "https://github.com/Leonxlnx/taste-skill",
+      "license": "MIT",
+      "category": "design",
+      "tags": ["design", "frontend", "ui", "art-direction", "turkish-docs"],
+      "source": {
+        "source": "github",
+        "repo": "Leonxlnx/taste-skill"
+      }
     }
   ]
 }

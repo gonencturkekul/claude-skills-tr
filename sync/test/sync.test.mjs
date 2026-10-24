@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync, execFileSync } from 'node:child_process';
-import { listCommands, parseFrontmatter, ShapeError } from '../lib.mjs';
+import { listCommands, listTopics, parseFrontmatter, ShapeError } from '../lib.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const syncDir = join(here, '..');
@@ -21,6 +21,9 @@ const APACHE_HEADER = '                                 Apache License\n        
 function tmp() {
   return mkdtempSync(join(tmpdir(), 'skills-tr-'));
 }
+
+// Every docs README carries the one-line tagline the website shows.
+const README = '---\ntagline: Arayüz tasarımı için kısa bir Türkçe rehber.\n---\n# Genel bakış\n';
 
 function summary(command, body = 'Bu komut arayüzü toparlar. '.repeat(20)) {
   return `---\ncommand: ${command}\ntitle: Başlık\nsource: reference/${command}.md\nupstreamCommit: abc\n---\n${body}\n`;
@@ -40,10 +43,11 @@ function makeMarketplace(commands, { skip = [], extra = [] } = {}) {
   writeFileSync(join(dir, 'sync', 'upstream.json'), JSON.stringify({
     skills: [{ name: 'impeccable', repo: 'pbakaus/impeccable', path: 'plugin', author: 'Paul Bakaus',
       homepage: 'https://impeccable.style', license: 'Apache-2.0',
+      kind: 'commands', skillDir: 'plugin/skills/impeccable', skillName: 'impeccable',
       metadataPath: 'skills/impeccable/scripts/command-metadata.json',
-      documentedCommit: 'abc', version: '4.7.0', syncedAt: '2026-10-25', commands }],
+      documentedCommit: 'abc', version: '4.7.0', syncedAt: '2026-10-25', items: commands }],
   }));
-  writeFileSync(join(docs, 'README.md'), '# Genel bakış\n');
+  writeFileSync(join(docs, 'README.md'), README);
   for (const c of commands) if (!skip.includes(c)) writeFileSync(join(docs, `${c}.md`), summary(c));
   for (const c of extra) writeFileSync(join(docs, `${c}.md`), summary(c));
   return dir;
@@ -68,6 +72,7 @@ function makeUpstream() {
   copyFileSync(realMetadata, join(meta, 'command-metadata.json'));
   mkdirSync(join(dir, 'plugin', '.claude-plugin'), { recursive: true });
   writeFileSync(join(dir, 'plugin', '.claude-plugin', 'plugin.json'), '{"name":"impeccable","version":"4.7.0"}');
+  writeFileSync(join(dir, 'plugin', 'skills', 'impeccable', 'SKILL.md'), '---\nname: impeccable\ndescription: x\n---\nbody\n');
   writeFileSync(join(dir, 'README.md'), 'outside plugin');
   // Upstream's plugin.json has no `license` field; the repo-root LICENSE file
   // is where pbakaus/impeccable states its license, so the fixture has one too.
@@ -181,8 +186,8 @@ test('check-upstream reports added and removed commands against the recorded lis
   const up = makeUpstream();
   const dir = makeMarketplace(ALL.filter((c) => c !== 'polish').concat('gone'));
   const out = JSON.parse(run('check-upstream.mjs', ['--repo', dir, '--skill', 'impeccable', '--upstream', up.dir]).stdout);
-  assert.deepEqual(out.addedCommands, ['polish']);
-  assert.deepEqual(out.removedCommands, ['gone']);
+  assert.deepEqual(out.addedItems, ['polish']);
+  assert.deepEqual(out.removedItems, ['gone']);
 });
 
 test('check-upstream exits 2 with shape-change when upstream metadata is gone', () => {
@@ -202,24 +207,24 @@ test('record-sync writes headCommit, version, commands and date into upstream.js
   assert.equal(s.documentedCommit, up.base);
   assert.equal(s.version, '4.7.0');
   assert.equal(s.syncedAt, '2026-11-01');
-  assert.deepEqual(s.commands, ALL);
+  assert.deepEqual(s.items, ALL);
 });
 
 test('check-upstream treats an unknown documentedCommit as every plugin file changed', () => {
   const up = makeUpstream();
   const out = JSON.parse(run('check-upstream.mjs', ['--repo', makeMarketplace(ALL), '--skill', 'impeccable', '--upstream', up.dir]).stdout);
   assert.equal(out.changed, true);
-  assert.deepEqual(out.changedFiles, ['plugin/.claude-plugin/plugin.json', 'plugin/skills/impeccable/scripts/command-metadata.json']);
+  assert.deepEqual(out.changedFiles, ['plugin/.claude-plugin/plugin.json', 'plugin/skills/impeccable/SKILL.md', 'plugin/skills/impeccable/scripts/command-metadata.json']);
 });
 
 // ---- review fixes: metadata shape, mass removal, renames, license, --head ----
 
 // Overwrites fields of the recorded skill entry, so tests can start from
 // e.g. "docs match this commit".
-function setRecorded(dir, fields) {
+function setRecorded(dir, fields, i = 0) {
   const u = join(dir, 'sync', 'upstream.json');
   const json = JSON.parse(readFileSync(u, 'utf8'));
-  Object.assign(json.skills[0], fields);
+  Object.assign(json.skills[i], fields);
   writeFileSync(u, JSON.stringify(json));
 }
 
@@ -281,7 +286,7 @@ test('check-upstream lists summaries whose source file no longer exists upstream
   git(up.dir, 'add', '-A');
   git(up.dir, 'commit', '-q', '-m', 'refs');
   const out = JSON.parse(run('check-upstream.mjs', ['--repo', makeMarketplace(ALL), '--skill', 'impeccable', '--upstream', up.dir]).stdout);
-  assert.deepEqual(out.missingSources, [{ command: 'polish', source: 'reference/polish.md' }]);
+  assert.deepEqual(out.missingSources, [{ item: 'polish', source: 'reference/polish.md' }]);
 });
 
 test('check-upstream exits 2 when the upstream LICENSE differs from the recorded license', () => {
@@ -321,7 +326,7 @@ test('check-upstream --head without git history treats every plugin file as chan
   const out = JSON.parse(r.stdout);
   assert.equal(out.headCommit, API_SHA);
   assert.equal(out.changed, true);
-  assert.deepEqual(out.changedFiles, ['plugin/.claude-plugin/plugin.json', 'plugin/skills/impeccable/scripts/command-metadata.json']);
+  assert.deepEqual(out.changedFiles, ['plugin/.claude-plugin/plugin.json', 'plugin/skills/impeccable/SKILL.md', 'plugin/skills/impeccable/scripts/command-metadata.json']);
 });
 
 test('check-upstream --head equal to documentedCommit reports no change', () => {
@@ -344,7 +349,7 @@ test('record-sync --head records the given SHA without git history', () => {
   assert.equal(r.status, 0, r.stderr);
   const s = JSON.parse(readFileSync(join(dir, 'sync', 'upstream.json'), 'utf8')).skills[0];
   assert.equal(s.documentedCommit, API_SHA);
-  assert.deepEqual(s.commands, ALL);
+  assert.deepEqual(s.items, ALL);
 });
 
 test('check-upstream and record-sync print usage and exit 1 without --skill or --upstream', () => {
@@ -365,13 +370,13 @@ test('buildSiteData produces the install and add commands', () => {
   assert.equal(data.skills[0].installCommand, '/plugin install impeccable@skills-tr');
   assert.equal(data.skills[0].author, 'Paul Bakaus');
   assert.equal(data.skills[0].repoUrl, 'https://github.com/pbakaus/impeccable');
-  assert.equal(data.skills[0].commands.length, 24);
+  assert.equal(data.skills[0].items.length, 24);
 });
 
 test('buildSiteData keeps Turkish characters and renders inline code', () => {
   const dir = makeMarketplace(ALL);
   writeFileSync(join(dir, 'docs', 'tr', 'impeccable', 'polish.md'), summary('polish', '`polish` ve ığşçöüİ'));
-  const cmd = buildSiteData(dir).skills[0].commands.find((c) => c.command === 'polish');
+  const cmd = buildSiteData(dir).skills[0].items.find((c) => c.id === 'polish');
   assert.match(cmd.html, /<code>polish<\/code>/);
   assert.match(cmd.html, /ığşçöüİ/);
   assert.equal(cmd.title, 'Başlık');
@@ -385,7 +390,7 @@ test('markdownToHtml escapes raw HTML', () => {
 
 test('markdownToHtml renders headings, lists, fenced code and safe links', () => {
   const html = markdownToHtml('## Ne yapar\n\nMetin.\n\n- bir\n- iki\n\n```\n/impeccable polish <x>\n```\n\n[repo](https://github.com/a/b) [kötü](javascript:alert(1))');
-  assert.match(html, /<h3>Ne yapar<\/h3>/);
+  assert.match(html, /<h4>Ne yapar<\/h4>/);
   assert.match(html, /<ul><li>bir<\/li><li>iki<\/li><\/ul>/);
   assert.match(html, /<pre><code>\/impeccable polish &lt;x&gt;<\/code><\/pre>/);
   assert.match(html, /<a href="https:\/\/github.com\/a\/b"[^>]*>repo<\/a>/);
@@ -407,4 +412,223 @@ test('validate --site passes when data.json is fresh and fails when stale', () =
   const r = run('validate.mjs', ['--repo', dir, '--site', site]);
   assert.equal(r.status, 1);
   assert.match(r.stdout, /stale/);
+});
+
+// ---- "guide" skills: no slash commands, one summary per references/*.md topic ----
+//
+// taste-skill (Leonxlnx/taste-skill) is the real case: no plugin.json, its
+// version lives in the repo's own .claude-plugin/marketplace.json, and the
+// documented items are the topic files in skills/taste-skill/references/.
+
+const TOPICS = ['colour', 'motion', 'type'];
+
+function topicSummary(topic, { key = 'topic', source = `references/${topic}.md` } = {}) {
+  return `---\n${key}: ${topic}\ntitle: Başlık\nsource: ${source}\nupstreamCommit: abc\n---\n${'Bu konu sayfayı anlatır. '.repeat(20)}\n`;
+}
+
+// Adds taste-skill (kind "guide") to a marketplace made by makeMarketplace().
+function addGuideSkill(dir, topics, { skip = [], extra = [] } = {}) {
+  const m = join(dir, '.claude-plugin', 'marketplace.json');
+  const mj = JSON.parse(readFileSync(m, 'utf8'));
+  mj.plugins.push({ name: 'taste-skill', description: 'Sanat yönetmenliği', category: 'design', source: { source: 'github', repo: 'Leonxlnx/taste-skill' } });
+  writeFileSync(m, JSON.stringify(mj));
+  const u = join(dir, 'sync', 'upstream.json');
+  const uj = JSON.parse(readFileSync(u, 'utf8'));
+  uj.skills.push({ name: 'taste-skill', kind: 'guide', repo: 'Leonxlnx/taste-skill', path: '.', watchPath: 'skills/taste-skill',
+    skillDir: 'skills/taste-skill', skillName: 'design-taste-frontend', author: 'Leonxlnx',
+    homepage: 'https://github.com/Leonxlnx/taste-skill', license: 'MIT', documentedCommit: 'abc', version: '2.1.4',
+    syncedAt: '2026-10-25', items: topics });
+  writeFileSync(u, JSON.stringify(uj));
+  const docs = join(dir, 'docs', 'tr', 'taste-skill');
+  mkdirSync(docs, { recursive: true });
+  writeFileSync(join(docs, 'README.md'), '---\ntagline: Sayfalarına sanat yönetmenliği getiren skill.\n---\n# taste-skill\n\n## Bölüm\n');
+  for (const t of topics) if (!skip.includes(t)) writeFileSync(join(docs, `${t}.md`), topicSummary(t));
+  for (const t of extra) writeFileSync(join(docs, `${t}.md`), topicSummary(t));
+  return dir;
+}
+
+// An upstream shaped like Leonxlnx/taste-skill: plugin root = repo root, no
+// plugin.json, version/license in .claude-plugin/marketplace.json.
+function makeGuideUpstream(topics = TOPICS) {
+  const dir = tmp();
+  git(dir, 'init', '-q', '-b', 'main');
+  git(dir, 'config', 'user.email', 't@t');
+  git(dir, 'config', 'user.name', 't');
+  mkdirSync(join(dir, '.claude-plugin'), { recursive: true });
+  writeFileSync(join(dir, '.claude-plugin', 'marketplace.json'), JSON.stringify({
+    name: 'taste-skill', owner: { name: 'leonxlnx' },
+    plugins: [{ name: 'taste-skill', version: '2.1.4', license: 'MIT', source: './', skills: ['./skills/taste-skill'] }],
+  }));
+  const skill = join(dir, 'skills', 'taste-skill');
+  mkdirSync(join(skill, 'references'), { recursive: true });
+  writeFileSync(join(skill, 'SKILL.md'), '---\nname: design-taste-frontend\ndescription: >-\n  art direction\n---\nbody\n');
+  for (const t of topics) writeFileSync(join(skill, 'references', `${t}.md`), `# ${t}\n`);
+  writeFileSync(join(dir, 'README.md'), 'outside the skill');
+  writeFileSync(join(dir, 'LICENSE'), 'MIT License\n\nCopyright (c) 2026 Leonxlnx\n');
+  git(dir, 'add', '-A');
+  git(dir, 'commit', '-q', '-m', 'base');
+  return { dir, base: git(dir, 'rev-parse', 'HEAD') };
+}
+
+function checkGuide(dir, up, extra = []) {
+  return run('check-upstream.mjs', ['--repo', dir, '--skill', 'taste-skill', '--upstream', up, ...extra]);
+}
+
+test('listTopics returns the sorted basenames of references/*.md', () => {
+  const up = makeGuideUpstream(['type', 'colour', 'motion']);
+  writeFileSync(join(up.dir, 'skills', 'taste-skill', 'references', 'notes.txt'), 'not a topic');
+  assert.deepEqual(listTopics(join(up.dir, 'skills', 'taste-skill')), ['colour', 'motion', 'type']);
+});
+
+test('listTopics throws ShapeError when references/ is missing or has no .md files', () => {
+  const up = makeGuideUpstream();
+  const skillDir = join(up.dir, 'skills', 'taste-skill');
+  rmSync(join(skillDir, 'references'), { recursive: true });
+  assert.throws(() => listTopics(skillDir), ShapeError);
+  mkdirSync(join(skillDir, 'references'));
+  writeFileSync(join(skillDir, 'references', 'readme.txt'), 'x');
+  assert.throws(() => listTopics(skillDir), ShapeError);
+});
+
+test('validate passes on a marketplace with a commands skill and a guide skill', () => {
+  const r = run('validate.mjs', ['--repo', addGuideSkill(makeMarketplace(ALL), TOPICS)]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
+test('validate names a guide topic with no summary and a summary with no topic', () => {
+  const r = run('validate.mjs', ['--repo', addGuideSkill(makeMarketplace(ALL), TOPICS, { skip: ['motion'], extra: ['ghost'] })]);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /taste-skill.*motion/);
+  assert.match(r.stdout, /taste-skill.*ghost/);
+});
+
+test('validate requires a guide summary to use the "topic" key and source references/<id>.md', () => {
+  const dir = addGuideSkill(makeMarketplace(ALL), TOPICS);
+  const docs = join(dir, 'docs', 'tr', 'taste-skill');
+  writeFileSync(join(docs, 'colour.md'), topicSummary('colour', { key: 'command' }));
+  writeFileSync(join(docs, 'type.md'), topicSummary('type', { source: 'references/fonts.md' }));
+  const r = run('validate.mjs', ['--repo', dir]);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /colour\.md.*"topic"/);
+  assert.match(r.stdout, /type\.md.*source/);
+});
+
+test('validate requires a README tagline of at most 110 characters', () => {
+  const dir = addGuideSkill(makeMarketplace(ALL), TOPICS);
+  writeFileSync(join(dir, 'docs', 'tr', 'taste-skill', 'README.md'), '# taste-skill\n');
+  writeFileSync(join(dir, 'docs', 'tr', 'impeccable', 'README.md'), `---\ntagline: ${'uzun '.repeat(30)}\n---\n# x\n`);
+  const r = run('validate.mjs', ['--repo', dir]);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /taste-skill.*tagline/);
+  assert.match(r.stdout, /impeccable.*tagline/);
+});
+
+test('check-upstream (guide) reads the version from the upstream marketplace.json and scopes the diff to watchPath', () => {
+  const up = makeGuideUpstream();
+  const dir = addGuideSkill(makeMarketplace(ALL), TOPICS);
+  setRecorded(dir, { documentedCommit: up.base }, 1);
+  writeFileSync(join(up.dir, 'skills', 'taste-skill', 'references', 'copy.md'), '# copy\n');
+  writeFileSync(join(up.dir, 'README.md'), 'changed outside');
+  git(up.dir, 'add', '-A');
+  git(up.dir, 'commit', '-q', '-m', 'add copy');
+  const r = checkGuide(dir, up.dir);
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.version, '2.1.4');
+  assert.deepEqual(out.changedFiles, ['skills/taste-skill/references/copy.md']);
+  assert.deepEqual(out.addedItems, ['copy']);
+  assert.deepEqual(out.removedItems, []);
+});
+
+test('check-upstream (guide) reports a removed topic and its missing source', () => {
+  const up = makeGuideUpstream(['colour', 'motion', 'type', 'layout']);
+  const dir = addGuideSkill(makeMarketplace(ALL), ['colour', 'motion', 'type', 'layout']);
+  rmSync(join(up.dir, 'skills', 'taste-skill', 'references', 'layout.md'));
+  const out = JSON.parse(checkGuide(dir, up.dir).stdout);
+  assert.deepEqual(out.removedItems, ['layout']);
+  assert.deepEqual(out.missingSources, []);
+});
+
+test('check-upstream (guide) lists a summary whose source moved', () => {
+  const up = makeGuideUpstream();
+  const dir = addGuideSkill(makeMarketplace(ALL), TOPICS);
+  writeFileSync(join(dir, 'docs', 'tr', 'taste-skill', 'type.md'), topicSummary('type', { source: 'references/old-type.md' }));
+  const out = JSON.parse(checkGuide(dir, up.dir).stdout);
+  assert.deepEqual(out.missingSources, [{ item: 'type', source: 'references/old-type.md' }]);
+});
+
+test('check-upstream (guide) exits 2 when references/ is gone', () => {
+  const up = makeGuideUpstream();
+  rmSync(join(up.dir, 'skills', 'taste-skill', 'references'), { recursive: true });
+  const r = checkGuide(addGuideSkill(makeMarketplace(ALL), TOPICS), up.dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /shape-change/);
+});
+
+test('check-upstream (guide) exits 2 when more than half of the topics disappear', () => {
+  const up = makeGuideUpstream(['colour']);
+  const r = checkGuide(addGuideSkill(makeMarketplace(ALL), TOPICS), up.dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+});
+
+test('check-upstream exits 2 when SKILL.md no longer has the recorded skill name', () => {
+  const up = makeGuideUpstream();
+  writeFileSync(join(up.dir, 'skills', 'taste-skill', 'SKILL.md'), '---\nname: taste\n---\nbody\n');
+  const r = checkGuide(addGuideSkill(makeMarketplace(ALL), TOPICS), up.dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /name/);
+});
+
+test('check-upstream (guide) exits 2 with no plugin.json and no matching upstream marketplace entry', () => {
+  const up = makeGuideUpstream();
+  writeFileSync(join(up.dir, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: 'x', plugins: [{ name: 'other', source: './' }] }));
+  const r = checkGuide(addGuideSkill(makeMarketplace(ALL), TOPICS), up.dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+});
+
+test('check-upstream (guide) exits 2 when the upstream marketplace entry declares another license', () => {
+  const up = makeGuideUpstream();
+  writeFileSync(join(up.dir, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: 'x', plugins: [{ name: 'taste-skill', version: '2.1.4', license: 'Apache-2.0', source: './' }] }));
+  const r = checkGuide(addGuideSkill(makeMarketplace(ALL), TOPICS), up.dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /license/i);
+});
+
+test('record-sync (guide) records topics and the version from the upstream marketplace.json', () => {
+  const up = makeGuideUpstream(['colour', 'motion', 'type', 'copy']);
+  const dir = addGuideSkill(makeMarketplace(ALL), TOPICS);
+  setRecorded(dir, { version: '0.0.1' }, 1);
+  const r = run('record-sync.mjs', ['--repo', dir, '--skill', 'taste-skill', '--upstream', up.dir, '--date', '2026-11-02']);
+  assert.equal(r.status, 0, r.stderr);
+  const s = JSON.parse(readFileSync(join(dir, 'sync', 'upstream.json'), 'utf8')).skills[1];
+  assert.equal(s.documentedCommit, up.base);
+  assert.equal(s.version, '2.1.4');
+  assert.equal(s.syncedAt, '2026-11-02');
+  assert.deepEqual(s.items, ['colour', 'copy', 'motion', 'type']);
+});
+
+test('buildSiteData emits the site contract for both kinds', () => {
+  const data = buildSiteData(addGuideSkill(makeMarketplace(ALL), TOPICS));
+  assert.deepEqual(Object.keys(data), ['generatedAt', 'marketplace', 'skills']);
+  assert.deepEqual(data.marketplace, {
+    name: 'skills-tr',
+    repoUrl: 'https://github.com/gonencturkekul/claude-skills-tr',
+    addCommand: '/plugin marketplace add gonencturkekul/claude-skills-tr',
+  });
+  const keys = ['name', 'kind', 'tagline', 'description', 'author', 'homepage', 'repoUrl', 'license', 'version', 'syncedAt',
+    'category', 'installCommand', 'invocation', 'docsUrl', 'overviewHtml', 'items'];
+  const [imp, taste] = data.skills;
+  assert.deepEqual(Object.keys(imp), keys);
+  assert.deepEqual(Object.keys(taste), keys);
+  assert.equal(imp.kind, 'commands');
+  assert.equal(imp.invocation, '/impeccable <komut>');
+  assert.equal(imp.tagline, 'Arayüz tasarımı için kısa bir Türkçe rehber.');
+  assert.equal(taste.kind, 'guide');
+  assert.equal(taste.invocation, '/taste-skill:design-taste-frontend');
+  assert.equal(taste.installCommand, '/plugin install taste-skill@skills-tr');
+  assert.equal(taste.category, 'design');
+  assert.equal(taste.repoUrl, 'https://github.com/Leonxlnx/taste-skill');
+  assert.deepEqual(taste.items.map((i) => i.id), TOPICS);
+  assert.deepEqual(Object.keys(taste.items[0]), ['id', 'title', 'html']);
+  assert.match(taste.overviewHtml, /<h3>taste-skill<\/h3>[\s\S]*<h4>Bölüm<\/h4>/);
 });

@@ -9,7 +9,8 @@ versioned like code.
 
 The marketplace never copies skill code: users install each skill straight
 from its author's repo. What we own is the Turkish layer, short summaries in
-`docs/tr/<skill>/` and the page at https://gonencturkekul.com/skills.html.
+`docs/tr/<skill>/` and the AI Skills page on gonencturkekul.com, which is
+rendered from `skills/data.json` in the site repo.
 When an upstream skill changes, that layer must follow, without anyone doing
 it by hand. Gönenç chose: no API key (this runs on his Claude subscription),
 and changes go live without review (push straight to `main`).
@@ -33,8 +34,26 @@ top of every command you run, or write the literal absolute paths instead.
 - `SITE`: absolute path of the attached gonencturkekul.com checkout (usually
   `$ROOT/gonencturkekul.com`; otherwise find it by remote URL).
 - `UP`: `$ROOT/<name>-upstream` for the skill being checked, where `<name>`
-  is the skill's `name` in `sync/upstream.json` (today only `impeccable`,
-  so `UP="$ROOT/impeccable-upstream"`).
+  is the skill's `name` in `sync/upstream.json`. Every skill has its own
+  folder: today `UP="$ROOT/impeccable-upstream"` for impeccable and
+  `UP="$ROOT/taste-skill-upstream"` for taste-skill. Never reuse one skill's
+  `UP` (or its `HEAD_SHA`, see step 1) for another skill.
+
+## Skill kinds
+
+Each skill in `sync/upstream.json` has a `kind`, and the kind decides what
+we summarise ("items"):
+
+| `kind` | Example | Items | One summary per | Summary frontmatter key |
+|---|---|---|---|---|
+| `commands` | impeccable | the skill's slash subcommands, read from its command metadata file (`metadataPath`) | command | `command` |
+| `guide` | taste-skill | the skill's reference topics: one per `references/*.md` file in the skill folder, item id = file name without `.md` | topic file | `topic` |
+
+A guide skill has no subcommands: Claude invokes it by itself (or the user
+types `/<plugin>:<skillName>`). Everything else in this routine is the same
+for both kinds. `skillDir` in `sync/upstream.json` is the skill folder (the
+one with `SKILL.md`) relative to the upstream repo root, e.g.
+`plugin/skills/impeccable` or `skills/taste-skill`.
 
 `UP` is deliberately outside `MKT`: upstream code must never end up inside
 claude-skills-tr, not even by accident.
@@ -72,9 +91,12 @@ Note whether `gh auth status` succeeded (`GH_OK=yes` or `GH_OK=no`). A
 failing `gh` does not fail the sync; it only changes how Failures and step 6
 talk to GitHub.
 
-Then fetch each upstream (`repo` in `sync/upstream.json`) into `UP`. Use the
-first method that works and remember which one (`MODE=git` or
-`MODE=tarball`):
+Then, for every skill in `sync/upstream.json`, fetch its upstream (`repo`)
+into its own `UP`. Use the first method that works and remember, per skill,
+which one (`MODE=git` or `MODE=tarball`). The examples use impeccable; for
+another skill replace `impeccable` with its `name` and `pbakaus/impeccable`
+with its `repo` (taste-skill: `UP="$ROOT/taste-skill-upstream"`,
+`Leonxlnx/taste-skill`):
 
 1. **git** (`MODE=git`):
    ```bash
@@ -94,13 +116,15 @@ first method that works and remember which one (`MODE=git` or
    echo "$HEAD_SHA"    # must be 40 hex characters; otherwise this method failed
    ```
    Fetch the SHA right after the tarball so both describe the same commit.
+   Each skill has its own `HEAD_SHA`; note it next to the skill's name.
 
-Replace `pbakaus/impeccable` with the skill's `repo` for other skills. If no
-method can read upstream, treat it as a failure (see Failures).
+If no method can read a skill's upstream, treat it as a failure (see
+Failures).
 
 ### 2. Check each upstream skill
 
-For every `name` in `sync/upstream.json` (today only `impeccable`):
+For every `name` in `sync/upstream.json` (today `impeccable` and
+`taste-skill`), with that skill's own `UP` and `HEAD_SHA`:
 
 ```bash
 # MODE=git
@@ -110,42 +134,58 @@ node "$MKT/sync/check-upstream.mjs" --skill <name> --upstream "$UP" --head "$HEA
 ```
 
 - Exit code 2 (`shape-change`): upstream reorganised its files, changed its
-  command metadata format, dropped more than half of the commands at once,
-  or changed its license. Stop and open an issue (see Failures). Do not guess.
+  command metadata format, moved or emptied a guide skill's `references/`
+  folder, dropped more than half of the items (commands or topics) at once,
+  renamed the skill in `SKILL.md`, lost its manifest, or changed its
+  license. Stop and open an issue (see Failures). Do not guess.
 - Any other non-zero exit code: a failure (see Failures).
-- Otherwise read the JSON: `changed`, `changedFiles`, `addedCommands`,
-  `removedCommands`, `missingSources`, `headCommit`, `version`.
-- If `changed` is false and `addedCommands`, `removedCommands` and
+- Otherwise read the JSON: `kind`, `changed`, `changedFiles`, `addedItems`,
+  `removedItems`, `missingSources`, `headCommit`, `version`. Items are
+  commands for a `commands` skill and topics for a `guide` skill.
+- If `changed` is false and `addedItems`, `removedItems` and
   `missingSources` are all empty, this skill has nothing to do.
 
 ### 3. Update the Turkish summaries (only for skills that have something to do)
 
-Each summary is `docs/tr/<name>/<command>.md`. Its frontmatter `source`
-names the upstream file it summarises (relative to the skill folder, e.g.
-`reference/polish.md`); upstream's path is
-`$UP/<skill.path>/skills/<name>/<source>` (for impeccable:
-`$UP/plugin/skills/impeccable/reference/polish.md`).
+Each summary is `docs/tr/<name>/<item>.md`: one per command for a
+`commands` skill, one per topic for a `guide` skill. Its frontmatter
+`source` names the upstream file it summarises, relative to the skill folder
+(`skillDir` in `sync/upstream.json`); upstream's path is
+`$UP/<skillDir>/<source>`. Examples:
+`$UP/plugin/skills/impeccable/reference/polish.md` (impeccable, `source:
+reference/polish.md`) and `$UP/skills/taste-skill/references/colour.md`
+(taste-skill, `source: references/colour.md`; for a guide skill the source
+is always `references/<topic>.md`).
 
 - **Changed source:** for every summary whose upstream source file is in
   `changedFiles`, read the new upstream file and rewrite that summary.
-  Also rewrite every summary if `plugin/skills/<name>/SKILL.md` or the
-  command metadata file changed in a way that affects behaviour.
+  Also rewrite every summary if `<skillDir>/SKILL.md` or (for a `commands`
+  skill) the command metadata file changed in a way that affects behaviour.
 - **Tarball mode:** with no history to diff, `changedFiles` lists every
-  plugin file. Read each summary's source and rewrite only the summaries
+  watched file. Read each summary's source and rewrite only the summaries
   that no longer match it; leave accurate ones untouched.
-- **Missing source:** each entry in `missingSources` is a summary whose
-  `source` file no longer exists upstream (moved, renamed or deleted). Find
-  where that command's content lives now (look through `changedFiles` and
-  the skill folder for the new file), set the summary's `source` to the new
-  path and rewrite the summary from it. If you cannot locate it with
-  confidence, treat it as a shape change: stop and report (see Failures).
-- **Added command:** write a new summary for each name in `addedCommands`.
-- **Removed command:** delete the summary of each name in `removedCommands`,
-  and remove it from the command table in `docs/tr/<name>/README.md`.
-- If a change touches the skill's overall purpose or install steps, update
-  `docs/tr/<name>/README.md` and the root `README.md` too.
+- **Missing source:** each entry in `missingSources` (`{ item, source }`) is
+  a summary whose `source` file no longer exists upstream (moved, renamed
+  or deleted). For a `commands` skill, find where that command's content
+  lives now (look through `changedFiles` and the skill folder for the new
+  file), set the summary's `source` to the new path and rewrite the summary
+  from it. For a `guide` skill a topic IS its file, so a missing source
+  shows up as a removed topic (plus maybe an added one); handle it as below.
+  If you cannot locate the content with confidence, treat it as a shape
+  change: stop and report (see Failures).
+- **Added item:** write a new summary for each name in `addedItems`, and
+  add a row for it to the command or topic table in
+  `docs/tr/<name>/README.md`.
+- **Removed item:** delete the summary of each name in `removedItems`, and
+  remove its row from the command or topic table in
+  `docs/tr/<name>/README.md`.
+- If a change touches the skill's overall purpose, its steps (taste-skill's
+  "run") or install steps, update `docs/tr/<name>/README.md` (including its
+  `tagline` frontmatter: one Turkish sentence, at most 110 characters) and
+  the root `README.md` too.
 
-Writing rules for every summary (same as the first ones):
+Writing rules for every summary (same as the first ones). A `commands`
+skill:
 
 ```
 ---
@@ -160,13 +200,30 @@ upstreamCommit: <headCommit from step 2>
 ## İlgili komutlar
 ```
 
+A `guide` skill:
+
+```
+---
+topic: <topic>
+title: <short Turkish title, 2-5 words>
+source: references/<topic>.md
+upstreamCommit: <headCommit from step 2>
+---
+## Ne anlatır
+## Ne zaman işine yarar
+## Örnek
+## İlgili konular
+```
+
 - 100–250 words of body, natural plain Turkish, no em dashes, no hype.
 - Address the reader informally with "sen" (kur, oku, istersen), the same voice
   as the website. Never the formal "siz" forms.
-- Example arguments under "## Örnek" are Turkish (`/impeccable polish ödeme akışı`).
-- Command names, file names, code and CLI text stay in English.
+- Examples under "## Örnek" are Turkish: arguments for a command
+  (`/impeccable polish ödeme akışı`), or for a guide topic a natural request
+  a developer would type (`Restoran sitemin ana sayfasını yeniden tasarla`).
+- Command names, topic ids, file names, code and CLI text stay in English.
 - A summary, not a translation. Be accurate to the source; don't invent.
-- If upstream marks a command deprecated, say so first.
+- If upstream marks a command or topic deprecated, say so first.
 - Summaries you did not need to touch keep their old `upstreamCommit`.
 
 Then record the sync (this is what marks the docs as matching upstream):
@@ -216,13 +273,15 @@ git -C "$MKT" status --porcelain | grep -v '^[MADR] '
 
 ```bash
 # claude-skills-tr, only if something is staged (git diff --cached --quiet exits 1)
-git -C "$MKT" commit -m "changed: auto-sync <name> <version> (<short headCommit>)"
+# one commit for the whole run; list every skill that changed, e.g.
+# "changed: auto-sync impeccable 4.7.1 (9368675), taste-skill 2.1.5 (1a2b3c4)"
+git -C "$MKT" commit -m "changed: auto-sync <name> <version> (<short headCommit>)[, <name> <version> (<short headCommit>)]"
 git -C "$MKT" push origin main
 
 # gonencturkekul.com, only if skills/data.json changed
 git -C "$SITE" add skills/data.json
 git -C "$SITE" status --porcelain | grep -v '^[MADR] '   # must print nothing, else failure
-git -C "$SITE" commit -m "changed: skills page data for <name> <version>"
+git -C "$SITE" commit -m "changed: skills page data for <name> <version>[, <name> <version>]"
 git -C "$SITE" push origin main
 ```
 
@@ -303,19 +362,38 @@ Try in this order:
 
 ## Adding a new skill later (manual, not done by the routine)
 
-1. Add an entry to `.claude-plugin/marketplace.json` with a `git-subdir`
-   source pointing at the author's repo (no `version` field).
+1. Add an entry to `.claude-plugin/marketplace.json` whose source points at
+   the author's repo, with no `version` field (users then always get
+   upstream's current state). Use `git-subdir` when the plugin is a
+   subfolder of the repo (impeccable: `path: plugin`) and `github` when the
+   plugin root is the repo root (taste-skill). A plugin without its own
+   `.claude-plugin/plugin.json` still works: Claude Code then treats our
+   entry as the manifest. Run `claude plugin validate .` and test
+   `claude plugin install <name>@skills-tr` with a clean `CLAUDE_CONFIG_DIR`.
 2. Add the skill to `sync/upstream.json` (`documentedCommit` can be
    anything; the next check treats an unknown commit as "everything
-   changed"). Set `license` to the SPDX id upstream uses (the check stops
-   the run if it differs; `sync/lib.mjs` `checkLicense` only recognises a
-   few licenses, so extend it if needed).
-3. Write `docs/tr/<name>/README.md` and one summary per command, run
-   `record-sync.mjs`, `validate.mjs`, `build-site-data.mjs`.
-4. The website needs work too: `gonencturkekul.com/skills.js` builds the
-   showcase and the command list from `data.skills[0]` only (the skills
-   list and the version/date bindings already handle several skills). A
-   second skill appears in the skills list but its commands are not shown
-   until the page is changed.
+   changed"). Fields:
+   - `kind`: `commands` if the skill has slash subcommands listed in a
+     metadata file (also set `metadataPath`, relative to `path`), `guide`
+     if it has none and keeps its knowledge in `references/*.md` files.
+   - `path`: the plugin root in the upstream repo (`.` for the repo root).
+   - `skillDir`: the folder that holds `SKILL.md`, relative to the repo root.
+   - `skillName`: the `name` in that `SKILL.md` frontmatter. The page shows
+     the invocation built from it, and the check stops if it changes.
+   - `watchPath` (optional): the folder whose changes trigger a doc pass,
+     when it should be narrower than `path` (taste-skill:
+     `skills/taste-skill`, so upstream README edits are ignored).
+   - `license`: the SPDX id upstream uses. The check stops the run if it
+     differs; `sync/lib.mjs` `checkLicense` only recognises a few license
+     files, so extend it if needed.
+   The version is read from upstream's `plugin.json`, or from upstream's own
+   `.claude-plugin/marketplace.json` entry with the same name when there is
+   no `plugin.json`.
+3. Write `docs/tr/<name>/README.md` (with a `tagline` frontmatter line: one
+   Turkish sentence, at most 110 characters, shown on the website) and one
+   summary per command or topic, run `record-sync.mjs`, `validate.mjs`,
+   `build-site-data.mjs`.
+4. No website work: the site's AI Skills page renders every skill in
+   `skills/data.json`, for both kinds.
 5. Nothing else to attach: the routine fetches every upstream in
    `sync/upstream.json` itself (step 1).

@@ -1,3 +1,6 @@
+---
+tagline: Frontend tasarımı için 24 komutluk bir tasarım dili: planla, denetle, sadeleştir, cilala.
+---
 # impeccable
 
 Orijinal skill: [Paul Bakaus](https://www.paulbakaus.com) ([GitHub](https://github.com/pbakaus/impeccable), [impeccable.style](https://impeccable.style), Apache-2.0)

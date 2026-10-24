@@ -1,6 +1,16 @@
 #!/usr/bin/env node
-// Builds the JSON file the website page (gonencturkekul.com/skills.html)
-// renders: marketplace commands, one card per skill, Turkish summaries as HTML.
+// Builds the JSON file the website's "AI Skills" page (gonencturkekul.com)
+// renders: the marketplace add command, then one entry per skill with its
+// install command, invocation, Turkish overview and one item per command
+// ("commands" skills) or reference topic ("guide" skills), as HTML.
+//
+// The output shape is a contract with the site, which renders any number of
+// skills from it, so keep it stable. The test "buildSiteData emits the site
+// contract for both kinds" pins every key:
+//   { generatedAt, marketplace: { name, repoUrl, addCommand },
+//     skills: [{ name, kind, tagline, description, author, homepage, repoUrl,
+//       license, version, syncedAt, category, installCommand, invocation,
+//       docsUrl, overviewHtml, items: [{ id, title, html }] }] }
 //
 // Why a generated data file: the routine should update *data*, never edit
 // hand-written HTML. The page stays a static file designed once; adding a new
@@ -15,7 +25,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { parseFrontmatter, paths, readJson } from './lib.mjs';
+import { kindOf, parseFrontmatter, paths, readJson } from './lib.mjs';
 
 const GITHUB_REPO = 'gonencturkekul/claude-skills-tr';
 
@@ -68,8 +78,10 @@ export function markdownToHtml(md, ctx = {}) {
       out.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
     } else if (/^#{1,4}\s/.test(line)) {
       flush();
-      // Page structure: h1 = page, h2 = skill, so summary headings start at h3.
-      const level = Math.min(line.match(/^#+/)[0].length + 1, 5);
+      // Page structure: h1 = page, h2 = skill, h3 = item title (the site
+      // renders it from `title`), so a summary's own `##` sections become h4
+      // and a README's `#` becomes h3.
+      const level = Math.min(line.match(/^#+/)[0].length + 2, 6);
       out.push(`<h${level}>${inline(line.replace(/^#+\s*/, ''), ctx)}</h${level}>`);
     } else if (/^\s*[-*]\s+/.test(line)) {
       flush();
@@ -100,14 +112,20 @@ export function buildSiteData(repo) {
   const marketplace = readJson(p.marketplace);
   const upstream = readJson(p.upstream);
   const skills = upstream.skills.map((skill) => {
+    const kind = kindOf(skill);
     const docsDir = p.docs(skill.name);
     const docsPath = `docs/tr/${skill.name}`;
     const ctx = { skill: skill.name, docsPath };
     const overviewFile = join(docsDir, 'README.md');
-    const overview = existsSync(overviewFile) ? parseFrontmatter(readFileSync(overviewFile, 'utf8')).body : '';
+    const overview = existsSync(overviewFile) ? parseFrontmatter(readFileSync(overviewFile, 'utf8')) : { data: {}, body: '' };
     const entry = marketplace.plugins.find((x) => x.name === skill.name) ?? {};
     return {
       name: skill.name,
+      kind,
+      // The tagline is the `tagline` key in the frontmatter of
+      // docs/tr/<skill>/README.md: written on purpose as one sentence, so the
+      // page never has to cut a paragraph. validate.mjs requires it (max 110).
+      tagline: overview.data.tagline ?? '',
       description: entry.description ?? '',
       author: skill.author,
       homepage: skill.homepage,
@@ -115,12 +133,21 @@ export function buildSiteData(repo) {
       license: skill.license,
       version: skill.version,
       syncedAt: skill.syncedAt,
+      category: entry.category ?? null,
       installCommand: `/plugin install ${skill.name}@${marketplace.name}`,
+      // How a user calls the skill. A commands skill takes a subcommand
+      // (`/impeccable polish`; "<komut>" is Turkish for "<command>"). A guide
+      // skill has none: Claude invokes it by itself, and the explicit form is
+      // Claude Code's plugin skill name, /<plugin>:<SKILL.md name>.
+      invocation: kind === 'commands' ? `/${skill.skillName} <komut>` : `/${skill.name}:${skill.skillName}`,
       docsUrl: `https://github.com/${GITHUB_REPO}/tree/main/${docsPath}`,
-      overviewHtml: markdownToHtml(overview, ctx),
-      commands: (skill.commands ?? []).map((command) => {
-        const { data, body } = parseFrontmatter(readFileSync(join(docsDir, `${command}.md`), 'utf8'));
-        return { command, title: data.title ?? command, html: markdownToHtml(body, ctx) };
+      overviewHtml: markdownToHtml(overview.body, ctx),
+      // One entry per command or topic, in upstream.json order (record-sync
+      // sorts it). `id` is also the in-page anchor suffix #<skill>-<id>, which
+      // is where relative ./<id>.md links in the summaries point.
+      items: (skill.items ?? []).map((id) => {
+        const { data, body } = parseFrontmatter(readFileSync(join(docsDir, `${id}.md`), 'utf8'));
+        return { id, title: data.title ?? id, html: markdownToHtml(body, ctx) };
       }),
     };
   });
@@ -132,7 +159,6 @@ export function buildSiteData(repo) {
       name: marketplace.name,
       repoUrl: `https://github.com/${GITHUB_REPO}`,
       addCommand: `/plugin marketplace add ${GITHUB_REPO}`,
-      updateCommand: `/plugin marketplace update ${marketplace.name}`,
     },
     skills,
   };

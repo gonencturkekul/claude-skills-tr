@@ -23,6 +23,7 @@ Claude Code içinde marketplace'i ekle:
 
 ```
 /plugin install impeccable@skills-tr
+/plugin install taste-skill@skills-tr
 ```
 
 Üçüncü taraf marketplace'lerde otomatik güncelleme varsayılan olarak kapalı. Açmak için `/plugin` → Marketplaces → skills-tr → Enable auto-update yolunu izle. Ya da ara ara elle güncelle:
@@ -36,6 +37,9 @@ Claude Code içinde marketplace'i ekle:
 | Skill | Yazar | Lisans | Türkçe rehber | Orijinal repo |
 |-------|-------|--------|---------------|---------------|
 | impeccable | Paul Bakaus | Apache-2.0 | [docs/tr/impeccable](docs/tr/impeccable/README.md) | [pbakaus/impeccable](https://github.com/pbakaus/impeccable) |
+| taste-skill | Leonxlnx | MIT | [docs/tr/taste-skill](docs/tr/taste-skill/README.md) | [Leonxlnx/taste-skill](https://github.com/Leonxlnx/taste-skill) |
+
+impeccable, `/impeccable polish` gibi alt komutlarla çalışır. taste-skill'in alt komutu yok: sayfa kurduğunda ya da yeniden tasarladığında Claude onu kendiliğinden kullanır, istersen `/taste-skill:design-taste-frontend` ile elle de çağırırsın.
 
 ## Güncellemeler nasıl işliyor?
 
@@ -45,17 +49,17 @@ Her gün çalışan bir Claude Code rutini orijinal skill'deki değişiklikleri 
 
 ## Skill'i orijinal marketplace'ten zaten kurdum
 
-Sorun değil. Örneğin impeccable'ı `/plugin marketplace add pbakaus/impeccable` ile kurduysan bu marketplace'teki girişe ihtiyacın yok, aynı plugin'i ikinci kez kurmana gerek yok. Türkçe rehberler senin kurulumun için de aynen geçerli.
+Sorun değil. Örneğin impeccable'ı `/plugin marketplace add pbakaus/impeccable` ya da taste-skill'i `/plugin marketplace add Leonxlnx/taste-skill` ile kurduysan bu marketplace'teki girişe ihtiyacın yok, aynı plugin'i ikinci kez kurmana gerek yok. Türkçe rehberler senin kurulumun için de aynen geçerli.
 
 ## Sorun bildirme
 
-- Skill'in kendisiyle ilgili hata ve özellik istekleri orijinal reponun issue sayfasına gider. impeccable için: [pbakaus/impeccable issues](https://github.com/pbakaus/impeccable/issues)
+- Skill'in kendisiyle ilgili hata ve özellik istekleri orijinal reponun issue sayfasına gider. impeccable için: [pbakaus/impeccable issues](https://github.com/pbakaus/impeccable/issues), taste-skill için: [Leonxlnx/taste-skill issues](https://github.com/Leonxlnx/taste-skill/issues)
 - Türkçe metinlerdeki hatalar, eksikler veya öneriler için: [gonencturkekul/claude-skills-tr issues](https://github.com/gonencturkekul/claude-skills-tr/issues)
 
 ## Lisans
 
-Bu repodaki kendi içeriğim (Türkçe dokümanlar ve script'ler) MIT lisanslı, ayrıntılar [LICENSE](LICENSE) dosyasında. Marketplace'te listelenen her skill kendi lisansına tabi. Örneğin impeccable Apache-2.0 lisanslı.
+Bu repodaki kendi içeriğim (Türkçe dokümanlar ve script'ler) MIT lisanslı, ayrıntılar [LICENSE](LICENSE) dosyasında. Marketplace'te listelenen her skill kendi lisansına tabi. Örneğin impeccable Apache-2.0, taste-skill MIT lisanslı.
 
 ## English
 
-This is `skills-tr`, a Claude Code plugin marketplace for the Turkish developer community. It does not copy or fork any skill code: every entry points straight at the original author's repository, so you always install the original, current plugin. What Claude reads stays in the original English; the only additions here are short Turkish guides for humans in `docs/tr/` and a Turkish page at [gonencturkekul.com/skills.html](https://gonencturkekul.com/skills.html). Please report skill bugs to the original repositories. Many thanks to the skill authors, starting with [Paul Bakaus](https://github.com/pbakaus/impeccable) for impeccable, for building and sharing their work.
+This is `skills-tr`, a Claude Code plugin marketplace for the Turkish developer community. It does not copy or fork any skill code: every entry points straight at the original author's repository, so you always install the original, current plugin. What Claude reads stays in the original English; the only additions here are short Turkish guides for humans in `docs/tr/` and a Turkish page at [gonencturkekul.com/skills.html](https://gonencturkekul.com/skills.html). Please report skill bugs to the original repositories. Many thanks to the skill authors, [Paul Bakaus](https://github.com/pbakaus/impeccable) for impeccable and [Leonxlnx](https://github.com/Leonxlnx/taste-skill) for taste-skill, for building and sharing their work.

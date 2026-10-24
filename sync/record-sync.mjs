@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Records in sync/upstream.json that our Turkish docs now match a given
-// upstream commit: the commit SHA, the plugin version, the command list and
-// the date.
+// upstream commit: the commit SHA, the plugin version, the item list
+// (commands, or reference topics for a "guide" skill) and the date.
 //
 // Why: the next run diffs from `documentedCommit`, validate.mjs checks
-// summaries against `commands`, and the website shows `version`/`syncedAt`.
+// summaries against `items`, and the website shows `version`/`syncedAt`.
 // The routine calls this only AFTER the summaries are regenerated, so a failed
 // run never marks upstream as "documented".
 //
@@ -17,7 +17,7 @@
 import { writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { DEFAULT_REPO, FULL_SHA, listCommands, parseArgs, paths, readJson, upstreamFiles } from './lib.mjs';
+import { DEFAULT_REPO, FULL_SHA, parseArgs, paths, readJson, readUpstream } from './lib.mjs';
 
 const USAGE = 'usage: node sync/record-sync.mjs --skill <name> --upstream <checkoutDir> --date YYYY-MM-DD [--head <sha>] [--repo <dir>]';
 
@@ -28,10 +28,14 @@ export function recordSync(repo, skillName, checkoutDir, date, { head } = {}) {
   const data = readJson(file);
   const skill = data.skills.find((s) => s.name === skillName);
   if (!skill) throw new Error(`skill "${skillName}" not found in sync/upstream.json`);
-  const files = upstreamFiles(checkoutDir, skill);
+  // Same reader and checks as check-upstream: the version comes from
+  // plugin.json, or from the upstream marketplace.json entry when the plugin
+  // has none (taste-skill). If upstream changed shape since the check, this
+  // throws and nothing is recorded.
+  const { items, version } = readUpstream(checkoutDir, skill);
   skill.documentedCommit = head ?? execFileSync('git', ['-C', checkoutDir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-  skill.version = readJson(files.pluginJson).version ?? skill.version;
-  skill.commands = listCommands(files.metadata);
+  skill.version = version ?? skill.version;
+  skill.items = items;
   skill.syncedAt = date;
   writeFileSync(file, JSON.stringify(data, null, 2) + '\n');
   return skill;
