@@ -3,7 +3,7 @@
 Orijinal skill: [Paul Bakaus](https://www.paulbakaus.com) ([GitHub](https://github.com/pbakaus/impeccable), [impeccable.style](https://impeccable.style), Apache-2.0)
 Türkçe özetler: Gönenç Türkekul
 
-Bu sayfa, impeccable 4.7.0 sürümünün Türkçe özetidir. Skill'in kendisi ve Claude'un okuduğu talimatlar orijinal İngilizce haliyle kalır. Buradaki metinler sadece insanlar için yazıldı.
+Bu sayfa, impeccable'ın Türkçe özetidir. Özetler her gün otomatik olarak orijinal repodaki son sürümle karşılaştırılıp güncel tutulur. Skill'in kendisi ve Claude'un okuduğu talimatlar orijinal İngilizce haliyle kalır. Buradaki metinler sadece insanlar için yazıldı.
 
 ## impeccable nedir?
 

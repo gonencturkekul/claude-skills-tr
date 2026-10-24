@@ -15,6 +15,9 @@ const syncDir = join(here, '..');
 const realMetadata = join(here, 'fixtures', 'command-metadata.json');
 const ALL = Object.keys(JSON.parse(readFileSync(realMetadata, 'utf8'))).sort();
 
+// First lines of the real Apache-2.0 LICENSE file in pbakaus/impeccable.
+const APACHE_HEADER = '                                 Apache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n';
+
 function tmp() {
   return mkdtempSync(join(tmpdir(), 'skills-tr-'));
 }
@@ -66,6 +69,9 @@ function makeUpstream() {
   mkdirSync(join(dir, 'plugin', '.claude-plugin'), { recursive: true });
   writeFileSync(join(dir, 'plugin', '.claude-plugin', 'plugin.json'), '{"name":"impeccable","version":"4.7.0"}');
   writeFileSync(join(dir, 'README.md'), 'outside plugin');
+  // Upstream's plugin.json has no `license` field; the repo-root LICENSE file
+  // is where pbakaus/impeccable states its license, so the fixture has one too.
+  writeFileSync(join(dir, 'LICENSE'), APACHE_HEADER);
   git(dir, 'add', '-A');
   git(dir, 'commit', '-q', '-m', 'base');
   return { dir, base: git(dir, 'rev-parse', 'HEAD') };
@@ -204,6 +210,149 @@ test('check-upstream treats an unknown documentedCommit as every plugin file cha
   const out = JSON.parse(run('check-upstream.mjs', ['--repo', makeMarketplace(ALL), '--skill', 'impeccable', '--upstream', up.dir]).stdout);
   assert.equal(out.changed, true);
   assert.deepEqual(out.changedFiles, ['plugin/.claude-plugin/plugin.json', 'plugin/skills/impeccable/scripts/command-metadata.json']);
+});
+
+// ---- review fixes: metadata shape, mass removal, renames, license, --head ----
+
+// Overwrites fields of the recorded skill entry, so tests can start from
+// e.g. "docs match this commit".
+function setRecorded(dir, fields) {
+  const u = join(dir, 'sync', 'upstream.json');
+  const json = JSON.parse(readFileSync(u, 'utf8'));
+  Object.assign(json.skills[0], fields);
+  writeFileSync(u, JSON.stringify(json));
+}
+
+function writeMeta(content) {
+  const f = join(tmp(), 'm.json');
+  writeFileSync(f, typeof content === 'string' ? content : JSON.stringify(content));
+  return f;
+}
+
+test('listCommands throws ShapeError when metadata is an empty object', () => {
+  assert.throws(() => listCommands(writeMeta({})), ShapeError);
+});
+
+test('listCommands throws ShapeError when metadata is wrapped in another object', () => {
+  const wrapped = { commands: JSON.parse(readFileSync(realMetadata, 'utf8')) };
+  assert.throws(() => listCommands(writeMeta(wrapped)), ShapeError);
+});
+
+test('listCommands throws ShapeError when a key is not a command name', () => {
+  assert.throws(() => listCommands(writeMeta({ Polish: { description: 'x' } })), ShapeError);
+});
+
+test('listCommands throws ShapeError when an entry has no string description', () => {
+  assert.throws(() => listCommands(writeMeta({ polish: { summary: 'x' } })), ShapeError);
+  assert.throws(() => listCommands(writeMeta({ polish: 'x' })), ShapeError);
+});
+
+test('check-upstream exits 2 when more than half of the recorded commands disappear', () => {
+  const up = makeUpstream();
+  const meta = join(up.dir, 'plugin', 'skills', 'impeccable', 'scripts', 'command-metadata.json');
+  const full = JSON.parse(readFileSync(meta, 'utf8'));
+  writeFileSync(meta, JSON.stringify(Object.fromEntries(Object.entries(full).slice(0, 5))));
+  const r = run('check-upstream.mjs', ['--repo', makeMarketplace(ALL), '--skill', 'impeccable', '--upstream', up.dir]);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /shape-change/);
+});
+
+test('check-upstream reports both paths of a renamed file (no rename detection)', () => {
+  const up = makeUpstream();
+  const ref = join(up.dir, 'plugin', 'skills', 'impeccable', 'reference');
+  mkdirSync(ref, { recursive: true });
+  writeFileSync(join(ref, 'polish.md'), 'polish guidance\n'.repeat(20));
+  git(up.dir, 'add', '-A');
+  git(up.dir, 'commit', '-q', '-m', 'add polish');
+  const dir = makeMarketplace(ALL);
+  setRecorded(dir, { documentedCommit: git(up.dir, 'rev-parse', 'HEAD') });
+  git(up.dir, 'mv', 'plugin/skills/impeccable/reference/polish.md', 'plugin/skills/impeccable/reference/polishing.md');
+  git(up.dir, 'commit', '-q', '-m', 'rename');
+  const out = JSON.parse(run('check-upstream.mjs', ['--repo', dir, '--skill', 'impeccable', '--upstream', up.dir]).stdout);
+  assert.ok(out.changedFiles.includes('plugin/skills/impeccable/reference/polish.md'), JSON.stringify(out.changedFiles));
+  assert.ok(out.changedFiles.includes('plugin/skills/impeccable/reference/polishing.md'));
+});
+
+test('check-upstream lists summaries whose source file no longer exists upstream', () => {
+  const up = makeUpstream();
+  const ref = join(up.dir, 'plugin', 'skills', 'impeccable', 'reference');
+  mkdirSync(ref, { recursive: true });
+  for (const c of ALL) if (c !== 'polish') writeFileSync(join(ref, `${c}.md`), c);
+  git(up.dir, 'add', '-A');
+  git(up.dir, 'commit', '-q', '-m', 'refs');
+  const out = JSON.parse(run('check-upstream.mjs', ['--repo', makeMarketplace(ALL), '--skill', 'impeccable', '--upstream', up.dir]).stdout);
+  assert.deepEqual(out.missingSources, [{ command: 'polish', source: 'reference/polish.md' }]);
+});
+
+test('check-upstream exits 2 when the upstream LICENSE differs from the recorded license', () => {
+  const up = makeUpstream();
+  writeFileSync(join(up.dir, 'LICENSE'), 'MIT License\n\nCopyright (c) 2026\n');
+  const r = run('check-upstream.mjs', ['--repo', makeMarketplace(ALL), '--skill', 'impeccable', '--upstream', up.dir]);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /license/i);
+});
+
+test('check-upstream exits 2 when plugin.json declares a different license', () => {
+  const up = makeUpstream();
+  writeFileSync(join(up.dir, 'plugin', '.claude-plugin', 'plugin.json'), '{"name":"impeccable","version":"4.7.0","license":"MIT"}');
+  const r = run('check-upstream.mjs', ['--repo', makeMarketplace(ALL), '--skill', 'impeccable', '--upstream', up.dir]);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /license/i);
+});
+
+test('check-upstream exits 2 when the upstream license cannot be found', () => {
+  const up = makeUpstream();
+  rmSync(join(up.dir, 'LICENSE'));
+  const r = run('check-upstream.mjs', ['--repo', makeMarketplace(ALL), '--skill', 'impeccable', '--upstream', up.dir]);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+});
+
+// The tarball fallback has no .git folder, so the head SHA comes from --head.
+function makeTarballCheckout() {
+  const up = makeUpstream();
+  rmSync(join(up.dir, '.git'), { recursive: true, force: true });
+  return up.dir;
+}
+const API_SHA = '0123456789abcdef0123456789abcdef01234567';
+
+test('check-upstream --head without git history treats every plugin file as changed', () => {
+  const r = run('check-upstream.mjs', ['--repo', makeMarketplace(ALL), '--skill', 'impeccable', '--upstream', makeTarballCheckout(), '--head', API_SHA]);
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.headCommit, API_SHA);
+  assert.equal(out.changed, true);
+  assert.deepEqual(out.changedFiles, ['plugin/.claude-plugin/plugin.json', 'plugin/skills/impeccable/scripts/command-metadata.json']);
+});
+
+test('check-upstream --head equal to documentedCommit reports no change', () => {
+  const dir = makeMarketplace(ALL);
+  setRecorded(dir, { documentedCommit: API_SHA });
+  const out = JSON.parse(run('check-upstream.mjs', ['--repo', dir, '--skill', 'impeccable', '--upstream', makeTarballCheckout(), '--head', API_SHA]).stdout);
+  assert.equal(out.changed, false);
+});
+
+test('check-upstream and record-sync reject a --head that is not a full commit SHA', () => {
+  const up = makeTarballCheckout();
+  const dir = makeMarketplace(ALL);
+  assert.equal(run('check-upstream.mjs', ['--repo', dir, '--skill', 'impeccable', '--upstream', up, '--head', 'HEAD']).status, 1);
+  assert.equal(run('record-sync.mjs', ['--repo', dir, '--skill', 'impeccable', '--upstream', up, '--head', 'abc', '--date', '2026-11-01']).status, 1);
+});
+
+test('record-sync --head records the given SHA without git history', () => {
+  const dir = makeMarketplace(ALL);
+  const r = run('record-sync.mjs', ['--repo', dir, '--skill', 'impeccable', '--upstream', makeTarballCheckout(), '--head', API_SHA, '--date', '2026-11-01']);
+  assert.equal(r.status, 0, r.stderr);
+  const s = JSON.parse(readFileSync(join(dir, 'sync', 'upstream.json'), 'utf8')).skills[0];
+  assert.equal(s.documentedCommit, API_SHA);
+  assert.deepEqual(s.commands, ALL);
+});
+
+test('check-upstream and record-sync print usage and exit 1 without --skill or --upstream', () => {
+  for (const script of ['check-upstream.mjs', 'record-sync.mjs']) {
+    const r = run(script, ['--skill', 'impeccable']);
+    assert.equal(r.status, 1, script);
+    assert.match(r.stderr, /usage/i, script);
+  }
 });
 
 // ---- build-site-data ----

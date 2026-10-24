@@ -28,7 +28,16 @@ export function readJson(path) {
 }
 
 // Upstream impeccable lists its user-facing commands as the keys of
-// command-metadata.json. We need exactly one Turkish summary per key.
+// command-metadata.json, each mapped to `{ description, argumentHint }`. We
+// need exactly one Turkish summary per key.
+//
+// Why the strict checks: the routine deletes the summary of every command
+// that vanishes from this file and then publishes without review. If upstream
+// wrapped the map (`{"commands": {...}}`) or emptied it, a loose "is it an
+// object?" check would report every command as removed and the routine would
+// wipe all summaries. Anything that does not look exactly like the format we
+// know is a shape change, so the run stops and a human looks.
+const COMMAND_NAME = /^[a-z0-9-]+$/;
 export function listCommands(metadataFile) {
   if (!existsSync(metadataFile)) {
     throw new ShapeError(`command metadata not found: ${metadataFile}`);
@@ -42,7 +51,59 @@ export function listCommands(metadataFile) {
   if (data === null || typeof data !== 'object' || Array.isArray(data)) {
     throw new ShapeError(`command metadata is not a JSON object: ${metadataFile}`);
   }
-  return Object.keys(data).sort();
+  const names = Object.keys(data);
+  if (names.length === 0) throw new ShapeError(`command metadata has no commands: ${metadataFile}`);
+  for (const name of names) {
+    if (!COMMAND_NAME.test(name)) {
+      throw new ShapeError(`command metadata key "${name}" is not a command name (format changed?): ${metadataFile}`);
+    }
+    const entry = data[name];
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry) || typeof entry.description !== 'string') {
+      throw new ShapeError(`command metadata entry "${name}" has no string "description" (format changed?): ${metadataFile}`);
+    }
+  }
+  return names.sort();
+}
+
+// A full git commit SHA. Used to validate `--head`, which the routine passes
+// by hand (from the GitHub API) when it could only download a tarball. A typo
+// or a ref name like "HEAD" would otherwise be recorded as documentedCommit.
+export const FULL_SHA = /^[0-9a-f]{40}$/;
+
+// Recognisable first lines of license files, mapped to SPDX ids. Kept tiny on
+// purpose: it only has to recognise licenses of skills we list; anything else
+// is reported as "unrecognised" and stops the run for a human to check.
+const LICENSE_PATTERNS = [
+  [/Apache License\s+Version 2\.0/i, 'Apache-2.0'],
+  [/^\s*MIT License/i, 'MIT'],
+  [/GNU GENERAL PUBLIC LICENSE\s+Version 3/i, 'GPL-3.0'],
+  [/BSD 3-Clause License/i, 'BSD-3-Clause'],
+];
+
+// Throws ShapeError unless upstream's license still equals the one recorded
+// in sync/upstream.json (`skill.license`).
+//
+// Why: we show the license on our pages, and a license change upstream may
+// change whether and how we can point people at the skill. The spec treats it
+// as a shape change: stop and let a human decide. plugin.json's `license`
+// wins when present; pbakaus/impeccable does not set it, so we fall back to
+// the LICENSE file at the upstream repo root (the checkout root).
+export function checkLicense(checkoutDir, skill, pluginJson) {
+  let found = typeof pluginJson.license === 'string' ? pluginJson.license : null;
+  let where = 'plugin.json "license"';
+  if (!found) {
+    const file = ['LICENSE', 'LICENSE.md', 'LICENSE.txt'].map((f) => join(checkoutDir, f)).find((f) => existsSync(f));
+    if (!file) throw new ShapeError(`no license found upstream (no plugin.json "license" and no LICENSE file in ${checkoutDir})`);
+    const text = readFileSync(file, 'utf8').slice(0, 2000);
+    const hit = LICENSE_PATTERNS.find(([re]) => re.test(text));
+    if (!hit) throw new ShapeError(`upstream license file ${file} is not a license we recognise`);
+    found = hit[1];
+    where = file;
+  }
+  if (found !== skill.license) {
+    throw new ShapeError(`upstream license changed: recorded "${skill.license}", upstream now "${found}" (from ${where})`);
+  }
+  return found;
 }
 
 // Summary files start with a tiny `key: value` frontmatter block. We only need
