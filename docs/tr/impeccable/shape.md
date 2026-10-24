@@ -15,7 +15,7 @@ Kod yazmadan önce UX ve UI'ı planlar. Zorunlu bir keşif görüşmesiyle başl
 
 ## Örnek
 ```
-/impeccable shape kullanıcı onboarding akışı
+/impeccable shape yeni kullanıcı karşılama akışı
 ```
 
 ## İlgili komutlar

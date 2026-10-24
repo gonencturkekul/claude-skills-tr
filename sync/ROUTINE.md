@@ -94,6 +94,9 @@ upstreamCommit: <headCommit from step 2>
 ```
 
 - 100–250 words of body, natural plain Turkish, no em dashes, no hype.
+- Address the reader informally with "sen" (kur, oku, istersen), the same voice
+  as the website. Never the formal "siz" forms.
+- Example arguments under "## Örnek" are Turkish (`/impeccable polish ödeme akışı`).
 - Command names, file names, code and CLI text stay in English.
 - A summary, not a translation. Be accurate to the source; don't invent.
 - If upstream marks a command deprecated, say so first.

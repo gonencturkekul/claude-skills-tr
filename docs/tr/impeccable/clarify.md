@@ -11,11 +11,11 @@ Anlaşılmayan arayüz metinlerini yeniden yazar: buton etiketleri, form alanlar
 - Hata mesajları ne olduğunu ve nasıl düzeltileceğini söylemiyorsa.
 - Butonlarda `OK`, `Submit` gibi belirsiz etiketler varsa.
 - Aynı kavram ürünün farklı yerlerinde farklı kelimelerle anılıyorsa.
-- Metinlerin çeviriye, uzun değerlere ve ekran okuyuculara uygun olduğundan emin olmak istiyorsanız.
+- Metinlerin çeviriye, uzun değerlere ve ekran okuyuculara uygun olduğundan emin olmak istiyorsan.
 
 ## Örnek
 ```
-/impeccable clarify signup form errors
+/impeccable clarify kayıt formu hataları
 ```
 
 ## İlgili komutlar

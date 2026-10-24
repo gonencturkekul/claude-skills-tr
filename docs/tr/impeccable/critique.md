@@ -8,14 +8,14 @@ upstreamCommit: dad8dbb3aac21ad1fa236c110315ef4abece23e8
 Bir sayfayı, özelliği ya da bileşeni UX açısından değerlendirir. Biri tasarım incelemesi, diğeri `impeccable detect` ve tarayıcı üzerinden anti-pattern taraması olmak üzere iki bağımsız değerlendirme çalıştırır; sub-agent varsa bunlar birbirini görmeyen iki ayrı agent'ta yürür. Sonuçta Nielsen'in 10 heuristiğine göre 40 üzerinden puanlanan, öncelikli sorunlar, persona bazlı riskler ve bilişsel yük analizi içeren bir rapor çıkar. Rapor `.impeccable/critique/` altına kaydedilir ve önceki çalıştırmalarla puan trendi gösterilir.
 
 ## Ne zaman kullanılır
-- Bir tasarım veya bileşen için genel bir geri bildirim istediğinizde
-- Hangi düzeltmeye önce odaklanacağınıza karar vermek istediğinizde
+- Bir tasarım veya bileşen için genel bir geri bildirim istediğinde
+- Hangi düzeltmeye önce odaklanacağına karar vermek istediğinde
 - Düzeltmelerden sonra puanın gerçekten yükselip yükselmediğini görmek için
-- Arayüzün ürüne özgü mü yoksa jenerik mi durduğunu anlamak istediğinizde
+- Arayüzün ürüne özgü mü yoksa jenerik mi durduğunu anlamak istediğinde
 
 ## Örnek
 ```
-/impeccable critique checkout sayfası
+/impeccable critique ödeme sayfası
 ```
 
 ## İlgili komutlar

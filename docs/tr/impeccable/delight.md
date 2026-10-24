@@ -9,8 +9,8 @@ Arayüze hak ettiği anlarda akılda kalan, ürüne özgü dokunuşlar ekler. Ö
 
 ## Ne zaman kullanılır
 - Arayüz düzgün çalışıyor ama ruhsuz hissettiriyorsa
-- Micro-interaction, animasyon ya da kişilik eklemek istediğinizde
-- Başarı, bekleme veya hata ekranlarını daha insani yapmak istediğinizde
+- Micro-interaction, animasyon ya da kişilik eklemek istediğinde
+- Başarı, bekleme veya hata ekranlarını daha insani yapmak istediğinde
 
 ## Örnek
 ```

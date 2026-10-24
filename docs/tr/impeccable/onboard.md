@@ -10,7 +10,7 @@ Yeni kullanıcıyı mümkün olan en kısa sürede ürünün değerini gördüğ
 ## Ne zaman kullanılır
 - Yeni kullanıcılar ilk adımda takılıyor veya ürünü bırakıyorsa
 - Boş listeler sadece boş alan olarak duruyorsa
-- Yeni bir özelliği mevcut kullanıcılara tanıtmak istediğinizde
+- Yeni bir özelliği mevcut kullanıcılara tanıtmak istediğinde
 
 ## Örnek
 ```

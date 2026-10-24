@@ -11,11 +11,11 @@ Mevcut bir tasarımı başka bir ekran boyutuna, cihaza ya da kullanım bağlam�
 - Masaüstü için yapılmış bir sayfa mobilde dağılıyorsa.
 - Hover'a bağlı etkileşimler dokunmatik ekranda çalışmıyorsa veya dokunma alanları 44x44px'ten küçükse.
 - Bir sayfanın baskı ya da e-posta versiyonu gerekiyorsa.
-- Slider veya sürüklenebilir kontroller gibi özel bileşenlerin dokunmayla gerçekten çalıştığını doğrulamak istiyorsanız.
+- Slider veya sürüklenebilir kontroller gibi özel bileşenlerin dokunmayla gerçekten çalıştığını doğrulamak istiyorsan.
 
 ## Örnek
 ```
-/impeccable adapt pricing-table mobile
+/impeccable adapt fiyat tablosu mobil
 ```
 
 ## İlgili komutlar

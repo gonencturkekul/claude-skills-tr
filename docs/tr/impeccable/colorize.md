@@ -14,7 +14,7 @@ Fazla gri veya tek düze kalmış bir arayüze hiyerarşi, anlam ve atmosfer ta�
 
 ## Örnek
 ```
-/impeccable colorize dashboard sidebar
+/impeccable colorize kontrol paneli kenar çubuğu
 ```
 
 ## İlgili komutlar

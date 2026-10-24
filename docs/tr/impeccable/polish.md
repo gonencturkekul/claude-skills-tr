@@ -10,12 +10,12 @@ Yayına çıkmadan önce son kalite turunu yapar: hizalama, boşluklar, tutarlı
 ## Ne zaman kullanılır
 - Özellik işlevsel olarak bitti ve yayına hazırlanıyorsa
 - "Bir şeyler yanlış duruyor" ama tam olarak ne olduğu belli değilse
-- İyi bir arayüzü daha da iyiye taşımak istediğinizde
+- İyi bir arayüzü daha da iyiye taşımak istediğinde
 - Daha önce `critique` ile çıkan bulguları kapatmak için
 
 ## Örnek
 ```
-/impeccable polish checkout akışı
+/impeccable polish ödeme akışı
 ```
 
 ## İlgili komutlar

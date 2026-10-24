@@ -11,11 +11,11 @@ Bir arayüzü inceler ve yalnızca anlamı olan yerlere animasyon ekler: bir aks
 - Arayüz durağan hissettiriyor ve geçişler ani görünüyorsa.
 - Butonlar, formlar veya durum değişiklikleri kullanıcıya geri bildirim vermiyorsa.
 - Sayfalar ya da paneller arası geçişte kullanıcı nerede olduğunu kaybediyorsa.
-- Mikro etkileşim veya hover efekti eklemek istiyorsanız.
+- Mikro etkileşim veya hover efekti eklemek istiyorsan.
 
 ## Örnek
 ```
-/impeccable animate checkout modal
+/impeccable animate ödeme modalı
 ```
 
 ## İlgili komutlar

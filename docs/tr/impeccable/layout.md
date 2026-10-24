@@ -15,7 +15,7 @@ Layout, boşluk ve görsel ritmi iyileştirir. Kutuları oynatmadan önce yapıs
 
 ## Örnek
 ```
-/impeccable layout dashboard ana sayfası
+/impeccable layout yönetim paneli ana sayfası
 ```
 
 ## İlgili komutlar

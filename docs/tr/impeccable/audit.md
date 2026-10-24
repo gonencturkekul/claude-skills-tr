@@ -8,14 +8,14 @@ upstreamCommit: dad8dbb3aac21ad1fa236c110315ef4abece23e8
 Arayüzün kodunu beş boyutta denetler: erişilebilirlik, performans, theming, responsive tasarım ve uygulama bütünlüğü. Her boyuta 0-4 arası puan verir, toplamda 20 üzerinden bir sağlık skoru çıkarır. Bulunan her sorunu P0-P3 önem derecesiyle etiketler ve hangi komutla düzeltileceğini önerir. Sorunları kendisi düzeltmez, sadece raporlar. Bu bir tasarım eleştirisi değil, ölçülebilir ve doğrulanabilir şeylere bakan bir kod denetimidir.
 
 ## Ne zaman kullanılır
-- Yayına çıkmadan önce erişilebilirlik (WCAG kontrast, klavye navigasyonu, ARIA) kontrolü yapmak istiyorsanız.
-- Hard-coded renkler, bozuk dark mode veya tutarsız token kullanımından şüpheleniyorsanız.
-- Hangi sorunun önce çözülmesi gerektiğine dair önceliklendirilmiş bir liste istiyorsanız.
+- Yayına çıkmadan önce erişilebilirlik (WCAG kontrast, klavye navigasyonu, ARIA) kontrolü yapmak istiyorsan.
+- Hard-coded renkler, bozuk dark mode veya tutarsız token kullanımından şüpheleniyorsan.
+- Hangi sorunun önce çözülmesi gerektiğine dair önceliklendirilmiş bir liste istiyorsan.
 - Düzeltmelerden sonra skorun ne kadar iyileştiğini görmek için.
 
 ## Örnek
 ```
-/impeccable audit settings page
+/impeccable audit ayarlar sayfası
 ```
 
 ## İlgili komutlar

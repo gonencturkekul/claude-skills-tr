@@ -50,14 +50,14 @@ Komutlar `/impeccable <komut> <hedef>` şeklinde çalışır:
 ```
 /impeccable polish
 /impeccable audit blog
-/impeccable critique landing
+/impeccable critique ana sayfa
 ```
 
 ## Komutlar
 
 | Komut | Ne yapar |
 |-------|----------|
-| [craft](./craft.md) | Eski bir takma ad. Normal bir "yeni iş" isteğiyle aynı akışı çalıştırır, ek bir davranışı yok. |
+| [craft](./craft.md) | Eski kısayol; normal bir yeni iş isteğiyle aynı. |
 | [init](./init.md) | Projeyi hazırlar, `PRODUCT.md` yazar, gerekirse `DESIGN.md` önerir. |
 | [document](./document.md) | Mevcut koddan renk, tipografi ve bileşenleri çıkarıp `DESIGN.md` üretir. |
 | [extract](./extract.md) | Tekrar eden bileşen ve token'ları tasarım sistemine toplar. |

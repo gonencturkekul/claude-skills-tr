@@ -15,7 +15,7 @@ Font seçimi, hiyerarşi, boyut, ağırlık ve okunabilirliği düzelterek tipog
 
 ## Örnek
 ```
-/impeccable typeset blog makale sayfası
+/impeccable typeset blog yazısı sayfası
 ```
 
 ## İlgili komutlar
