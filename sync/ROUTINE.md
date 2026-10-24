@@ -20,11 +20,26 @@ and changes go live without review (push straight to `main`).
 |---|---|---|
 | `claude-skills-tr/` | gonencturkekul/claude-skills-tr | read/write, push to `main` |
 | `gonencturkekul.com/` | gonencturkekul/gonencturkekul.com | read/write, push to `main` (Vercel deploys) |
-| `impeccable/` | pbakaus/impeccable | read only, never push |
+| `../impeccable-upstream/` | pbakaus/impeccable | fetched by the routine (see below), read only, never push |
 
 If a folder name differs in the session, find each repo by its remote URL.
-Every skill in `sync/upstream.json` must have its upstream repo attached. If
-one is missing, treat it as a failure (see Failures).
+
+Upstream repos belong to other people, so they usually cannot be attached to
+the task. Fetch each upstream (`repo` in `sync/upstream.json`) yourself, next
+to the attached repos, in this order until one works:
+
+1. `git clone --filter=blob:none https://github.com/<repo>.git ../<name>-upstream`
+2. If cloning is refused, download the tarball:
+   `curl -fsSL https://codeload.github.com/<repo>/tar.gz/HEAD | tar xz` and
+   use the GitHub API (`curl -fsSL https://api.github.com/repos/<repo>/commits/HEAD`)
+   for the head commit SHA. Without git history, `check-upstream.mjs` cannot
+   diff; in that case compare each summary's `source` file content against
+   the previous run by rewriting only summaries whose upstream source text
+   differs from what the summary describes, and record the API SHA by hand
+   in `sync/upstream.json` (`documentedCommit`, `version` from
+   `plugin/.claude-plugin/plugin.json`, `commands`, `syncedAt`).
+
+If no method can read upstream, treat it as a failure (see Failures).
 
 ## Rules
 
@@ -50,8 +65,8 @@ npm test            # the sync scripts' own tests; stop on failure (see Failures
 For every `name` in `sync/upstream.json` (today only `impeccable`):
 
 ```bash
-git -C ../<upstream-folder> pull --ff-only
-node sync/check-upstream.mjs --skill <name> --upstream ../<upstream-folder>
+git -C ../<name>-upstream pull --ff-only
+node sync/check-upstream.mjs --skill <name> --upstream ../<name>-upstream
 ```
 
 - Exit code 2 (`shape-change`): upstream reorganised its files. Stop and
@@ -105,7 +120,7 @@ upstreamCommit: <headCommit from step 2>
 Then record the sync (this is what marks the docs as matching upstream):
 
 ```bash
-node sync/record-sync.mjs --skill <name> --upstream ../<upstream-folder> --date TODAY
+node sync/record-sync.mjs --skill <name> --upstream ../<name>-upstream --date TODAY
 node sync/validate.mjs        # must print "ok"; fix every listed problem, then re-run
 ```
 
