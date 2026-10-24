@@ -1,0 +1,10 @@
+{
+  "name": "claude-skills-tr",
+  "private": true,
+  "type": "module",
+  "description": "Turkish docs + sync scripts for the skills-tr Claude Code marketplace. No dependencies on purpose.",
+  "scripts": {
+    "test": "node --test \"sync/test/*.test.mjs\"",
+    "validate": "node sync/validate.mjs"
+  }
+}
