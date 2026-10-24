@@ -1,0 +1,31 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "skills-tr",
+  "owner": {
+    "name": "Gönenç Türkekul",
+    "url": "https://gonencturkekul.com"
+  },
+  "metadata": {
+    "description": "Claude Code için Türkçe rehberli skill marketplace. Skill'ler orijinal yazarlarının depolarından kurulur; bu depo yalnızca Türkçe özetleri barındırır."
+  },
+  "plugins": [
+    {
+      "name": "impeccable",
+      "description": "Frontend tasarımı için akıcı bir tasarım dili: polish, audit, critique gibi 24 komut ve yaygın hata kalıplarının tespiti. Yazar: Paul Bakaus. Türkçe rehber: https://gonencturkekul.com/skills.html",
+      "author": {
+        "name": "Paul Bakaus",
+        "email": "paul@paulbakaus.com"
+      },
+      "homepage": "https://impeccable.style",
+      "repository": "https://github.com/pbakaus/impeccable",
+      "license": "Apache-2.0",
+      "category": "design",
+      "tags": ["design", "frontend", "ui", "ux", "turkish-docs"],
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/pbakaus/impeccable.git",
+        "path": "plugin"
+      }
+    }
+  ]
+}

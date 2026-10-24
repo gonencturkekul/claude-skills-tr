@@ -1,0 +1,16 @@
+{
+  "skills": [
+    {
+      "name": "impeccable",
+      "repo": "pbakaus/impeccable",
+      "path": "plugin",
+      "author": "Paul Bakaus",
+      "homepage": "https://impeccable.style",
+      "license": "Apache-2.0",
+      "metadataPath": "skills/impeccable/scripts/command-metadata.json",
+      "documentedCommit": "dad8dbb3aac21ad1fa236c110315ef4abece23e8",
+      "version": "4.7.0",
+      "syncedAt": "2026-10-25"
+    }
+  ]
+}
