@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync, execFileSync } from 'node:child_process';
-import { listCommands, listTopics, parseFrontmatter, ShapeError } from '../lib.mjs';
+import { frontmatterValue, listCollectionSkills, listCommands, listTopics, parseFrontmatter, ShapeError } from '../lib.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const syncDir = join(here, '..');
@@ -607,8 +607,317 @@ test('record-sync (guide) records topics and the version from the upstream marke
   assert.deepEqual(s.items, ['colour', 'copy', 'motion', 'type']);
 });
 
-test('buildSiteData emits the site contract for both kinds', () => {
-  const data = buildSiteData(addGuideSkill(makeMarketplace(ALL), TOPICS));
+// ---- "collection" and "single" skills ----
+//
+// collection: one plugin bundling many skills (obra/superpowers,
+// alirezarezvani/claude-skills/engineering). Items are found through the
+// plugin manifest's `skills` field. single: one skill, README only
+// (vercel-labs/agent-skills web-design-guidelines, tt-a1i/archify). The
+// fixtures copy the real layouts in miniature.
+
+function initRepo(dir) {
+  git(dir, 'init', '-q', '-b', 'main');
+  git(dir, 'config', 'user.email', 't@t');
+  git(dir, 'config', 'user.name', 't');
+}
+
+function commitAll(dir, msg = 'base') {
+  git(dir, 'add', '-A');
+  git(dir, 'commit', '-q', '-m', msg);
+  return git(dir, 'rev-parse', 'HEAD');
+}
+
+function writeSkill(dir, name = basenameOf(dir)) {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: x\n---\nbody\n`);
+}
+function basenameOf(p) {
+  return p.split(/[\\/]/).pop();
+}
+
+// A collection upstream: plugin root = `root` inside the repo, plugin.json
+// with an optional `skills` field, and skill folders at the given paths
+// (relative to the plugin root).
+function makeCollectionUpstream({ root = '.', skills, folders = ['skills/alpha', 'skills/beta'], manifest = {} } = {}) {
+  const dir = tmp();
+  initRepo(dir);
+  const plugin = join(dir, root);
+  mkdirSync(join(plugin, '.claude-plugin'), { recursive: true });
+  const json = { name: 'superpowers', version: '7.0.1', license: 'MIT', ...manifest };
+  if (skills !== undefined) json.skills = skills;
+  writeFileSync(join(plugin, '.claude-plugin', 'plugin.json'), JSON.stringify(json));
+  for (const f of folders) writeSkill(join(plugin, f));
+  writeFileSync(join(dir, 'README.md'), 'outside the skills');
+  writeFileSync(join(dir, 'LICENSE'), 'MIT License\n');
+  return { dir, plugin, base: commitAll(dir) };
+}
+
+function skillSummary(id, { key = 'skill', source = `skills/${id}/SKILL.md` } = {}) {
+  return `---\n${key}: ${id}\ntitle: Başlık\nsource: ${source}\nupstreamCommit: abc\n---\n${'Bu skill işini anlatır. '.repeat(20)}\n`;
+}
+
+// Adds an entry to a marketplace made by makeMarketplace(): the marketplace
+// plugin, the upstream.json skill and its docs (README + one summary per item).
+function addSkill(dir, entry, { summaries = {}, readme = '---\ntagline: Kısa bir tanıtım cümlesi.\n---\n# x\n' } = {}) {
+  const m = join(dir, '.claude-plugin', 'marketplace.json');
+  const mj = JSON.parse(readFileSync(m, 'utf8'));
+  mj.plugins.push({ name: entry.name, description: 'Açıklama', category: 'development', source: './x' });
+  writeFileSync(m, JSON.stringify(mj));
+  const u = join(dir, 'sync', 'upstream.json');
+  const uj = JSON.parse(readFileSync(u, 'utf8'));
+  uj.skills.push({ repo: 'o/r', path: '.', author: 'A', homepage: 'https://example.com', license: 'MIT',
+    documentedCommit: 'abc', version: '1.0.0', syncedAt: '2026-10-25', items: [], ...entry });
+  writeFileSync(u, JSON.stringify(uj));
+  const docs = join(dir, 'docs', 'tr', entry.name);
+  mkdirSync(docs, { recursive: true });
+  writeFileSync(join(docs, 'README.md'), readme);
+  for (const [id, text] of Object.entries(summaries)) writeFileSync(join(docs, `${id}.md`), text);
+  return dir;
+}
+
+function addCollection(dir, items = ['alpha', 'beta'], extra = {}) {
+  return addSkill(dir, { name: 'superpowers', kind: 'collection', watchPath: 'skills', items, ...extra },
+    { summaries: Object.fromEntries(items.map((id) => [id, skillSummary(id)])) });
+}
+
+function addSingle(dir, extra = {}, opts = {}) {
+  return addSkill(dir, { name: 'web-design-guidelines', kind: 'single', path: 'skills/web-design-guidelines',
+    skillDir: 'skills/web-design-guidelines', skillName: 'web-design-guidelines', ...extra }, opts);
+}
+
+test('listCollectionSkills reads ./skills when the manifest has no "skills" field', () => {
+  const up = makeCollectionUpstream({ folders: ['skills/beta', 'skills/alpha'] });
+  mkdirSync(join(up.plugin, 'skills', 'notes'));
+  writeFileSync(join(up.plugin, 'skills', 'helper.test.mjs'), '// not a skill');
+  assert.deepEqual(listCollectionSkills(up.plugin, {}), ['alpha', 'beta']);
+});
+
+test('listCollectionSkills accepts a string "skills" path (ui-ux-pro-max: "./.claude/skills/")', () => {
+  const up = makeCollectionUpstream({ folders: ['.claude/skills/brand', '.claude/skills/slides'] });
+  assert.deepEqual(listCollectionSkills(up.plugin, { skills: './.claude/skills/' }), ['brand', 'slides']);
+});
+
+test('listCollectionSkills accepts an array mixing a skills folder and single skill folders', () => {
+  const up = makeCollectionUpstream({ folders: ['skills/alpha', 'skills/beta', 'minimalist', 'strict-api'] });
+  assert.deepEqual(listCollectionSkills(up.plugin, { skills: ['./skills', './minimalist', './strict-api'] }),
+    ['alpha', 'beta', 'minimalist', 'strict-api']);
+});
+
+test('listCollectionSkills also scans ./skills when "skills" lists other folders (it adds to the default)', () => {
+  const up = makeCollectionUpstream({ folders: ['skills/alpha', 'extra/beta'] });
+  assert.deepEqual(listCollectionSkills(up.plugin, { skills: './extra/' }), ['alpha', 'beta']);
+  // An empty default folder does not matter when the listed folder has skills.
+  const empty = makeCollectionUpstream({ folders: ['extra/beta'] });
+  mkdirSync(join(empty.plugin, 'skills'));
+  assert.deepEqual(listCollectionSkills(empty.plugin, { skills: ['./extra'] }), ['beta']);
+});
+
+test('listCollectionSkills treats a quoted SKILL.md name like a bare one', () => {
+  const up = makeCollectionUpstream({ folders: ['skills/alpha'] });
+  writeFileSync(join(up.plugin, 'skills', 'alpha', 'SKILL.md'), '---\nname: "alpha"\ndescription: x\n---\nbody\n');
+  assert.deepEqual(listCollectionSkills(up.plugin, {}), ['alpha']);
+});
+
+test('listCollectionSkills throws ShapeError when a folder name differs from its SKILL.md name', () => {
+  const up = makeCollectionUpstream();
+  writeSkill(join(up.plugin, 'skills', 'beta'), 'beta-renamed');
+  assert.throws(() => listCollectionSkills(up.plugin, {}), (err) => err instanceof ShapeError && /beta-renamed/.test(err.message));
+});
+
+test('listCollectionSkills throws ShapeError when nothing is found', () => {
+  const up = makeCollectionUpstream({ folders: [] });
+  mkdirSync(join(up.plugin, 'skills'));
+  // A listed folder with no SKILL.md anywhere, an empty list, a missing folder.
+  assert.throws(() => listCollectionSkills(up.plugin, {}), ShapeError);
+  assert.throws(() => listCollectionSkills(up.plugin, { skills: [] }), ShapeError);
+  assert.throws(() => listCollectionSkills(up.plugin, { skills: './moved' }), ShapeError);
+  assert.throws(() => listCollectionSkills(up.plugin, { skills: { path: './skills' } }), ShapeError);
+});
+
+test('listCollectionSkills throws ShapeError on a path outside the plugin or a duplicate skill', () => {
+  const up = makeCollectionUpstream({ root: 'engineering', folders: ['skills/alpha', 'alpha-copy/alpha'] });
+  writeSkill(join(up.dir, 'outside'));
+  assert.throws(() => listCollectionSkills(up.plugin, { skills: '../outside' }), ShapeError);
+  assert.throws(() => listCollectionSkills(up.plugin, { skills: ['./skills', './alpha-copy'] }), /listed twice/);
+});
+
+test('check-upstream (collection) finds the skills, reads the version and resolves sources from the plugin root', () => {
+  const up = makeCollectionUpstream({ folders: ['skills/alpha', 'skills/beta', 'skills/gamma'] });
+  const dir = addCollection(makeMarketplace(ALL), ['alpha', 'beta']);
+  writeFileSync(join(dir, 'docs', 'tr', 'superpowers', 'beta.md'), skillSummary('beta', { source: 'skills/old-beta/SKILL.md' }));
+  setRecorded(dir, { documentedCommit: up.base }, 1);
+  writeFileSync(join(up.dir, 'skills', 'alpha', 'extra.md'), 'x');
+  writeFileSync(join(up.dir, 'README.md'), 'changed outside');
+  commitAll(up.dir, 'change');
+  const r = run('check-upstream.mjs', ['--repo', dir, '--skill', 'superpowers', '--upstream', up.dir]);
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.kind, 'collection');
+  assert.equal(out.version, '7.0.1');
+  assert.deepEqual(out.changedFiles, ['skills/alpha/extra.md']);
+  assert.deepEqual(out.addedItems, ['gamma']);
+  assert.deepEqual(out.removedItems, []);
+  assert.deepEqual(out.missingSources, [{ item: 'beta', source: 'skills/old-beta/SKILL.md' }]);
+});
+
+test('check-upstream (collection) exits 2 when a bundled skill is renamed in its SKILL.md', () => {
+  const up = makeCollectionUpstream();
+  writeSkill(join(up.dir, 'skills', 'alpha'), 'alpha-two');
+  const r = run('check-upstream.mjs', ['--repo', addCollection(makeMarketplace(ALL)), '--skill', 'superpowers', '--upstream', up.dir]);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /shape-change/);
+});
+
+test('record-sync (collection) records the discovered skills from a subfolder plugin with an array "skills"', () => {
+  const up = makeCollectionUpstream({ root: 'engineering', skills: ['./skills', './minimalist'], folders: ['skills/alpha', 'minimalist'],
+    manifest: { name: 'engineering-advanced-skills', version: '2.14.1' } });
+  const dir = addCollection(makeMarketplace(ALL), ['alpha'], { path: 'engineering', watchPath: undefined });
+  const r = run('record-sync.mjs', ['--repo', dir, '--skill', 'superpowers', '--upstream', up.dir, '--date', '2026-11-03']);
+  assert.equal(r.status, 0, r.stderr);
+  const s = JSON.parse(readFileSync(join(dir, 'sync', 'upstream.json'), 'utf8')).skills[1];
+  assert.deepEqual(s.items, ['alpha', 'minimalist']);
+  assert.equal(s.version, '2.14.1');
+});
+
+// A plain skill repo like vercel-labs/agent-skills: no plugin manifest, no
+// LICENSE file ("## License / MIT" in the README), version in SKILL.md
+// frontmatter metadata.
+function makeSingleUpstream({ readme = '# Agent skills\n\n## License\n\nMIT\n', skillName = 'web-design-guidelines' } = {}) {
+  const dir = tmp();
+  initRepo(dir);
+  const skill = join(dir, 'skills', 'web-design-guidelines');
+  mkdirSync(skill, { recursive: true });
+  writeFileSync(join(skill, 'SKILL.md'), `---\nname: ${skillName}\ndescription: x\nmetadata:\n  author: vercel\n  version: "1.0.0"\n---\nbody\n`);
+  writeFileSync(join(dir, 'README.md'), readme);
+  writeFileSync(join(dir, 'package.json'), '{"name":"x","version":"0.1.22"}');
+  return { dir, base: commitAll(dir) };
+}
+
+const SINGLE_FALLBACKS = { licenseFile: 'README.md', versionFrom: { frontmatter: 'metadata.version' } };
+
+function checkSingle(dir, up) {
+  return run('check-upstream.mjs', ['--repo', dir, '--skill', 'web-design-guidelines', '--upstream', up]);
+}
+
+test('check-upstream (single) has no items and reads license and version from the declared fallbacks', () => {
+  const up = makeSingleUpstream();
+  const r = checkSingle(addSingle(makeMarketplace(ALL), SINGLE_FALLBACKS), up.dir);
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.kind, 'single');
+  assert.deepEqual(out.addedItems, []);
+  assert.deepEqual(out.removedItems, []);
+  assert.equal(out.version, '1.0.0');
+});
+
+test('check-upstream (single) exits 2 when SKILL.md is renamed', () => {
+  const up = makeSingleUpstream({ skillName: 'web-guidelines' });
+  const r = checkSingle(addSingle(makeMarketplace(ALL), SINGLE_FALLBACKS), up.dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /name/);
+});
+
+test('check-upstream exits 2 for a repo without a manifest when the skill declares no versionFrom', () => {
+  const up = makeSingleUpstream();
+  const r = checkSingle(addSingle(makeMarketplace(ALL), { licenseFile: 'README.md' }), up.dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /manifest/);
+});
+
+test('check-upstream exits 2 when the licenseFile has no recognisable license section', () => {
+  const up = makeSingleUpstream({ readme: '# Agent skills\n\nUnlike MIT, this is ...\n\n## Licensing\n\nAsk us.\n' });
+  const r = checkSingle(addSingle(makeMarketplace(ALL), SINGLE_FALLBACKS), up.dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /license/i);
+});
+
+test('check-upstream exits 2 when the licenseFile states another license than recorded', () => {
+  const up = makeSingleUpstream({ readme: '# x\n\n## License\n\nMIT\n' });
+  const r = checkSingle(addSingle(makeMarketplace(ALL), { ...SINGLE_FALLBACKS, license: 'Apache-2.0' }), up.dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /license changed/);
+});
+
+test('check-upstream reads versionFrom {file,key} and exits 2 when the key is gone', () => {
+  const up = makeSingleUpstream();
+  const dir = addSingle(makeMarketplace(ALL), { licenseFile: 'README.md', versionFrom: { file: 'package.json', key: 'version' } });
+  assert.equal(JSON.parse(checkSingle(dir, up.dir).stdout).version, '0.1.22');
+  writeFileSync(join(up.dir, 'package.json'), '{"name":"x"}');
+  const r = checkSingle(dir, up.dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /version/);
+});
+
+test('check-upstream exits 2 when the versionFrom frontmatter key is gone', () => {
+  const up = makeSingleUpstream();
+  writeFileSync(join(up.dir, 'skills', 'web-design-guidelines', 'SKILL.md'), '---\nname: web-design-guidelines\nversion: 1.0.0\n---\nbody\n');
+  const r = checkSingle(addSingle(makeMarketplace(ALL), SINGLE_FALLBACKS), up.dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+});
+
+test('record-sync (single) records an empty item list and the fallback version', () => {
+  const up = makeSingleUpstream();
+  const dir = addSingle(makeMarketplace(ALL), { ...SINGLE_FALLBACKS, version: '0.0.1' });
+  const r = run('record-sync.mjs', ['--repo', dir, '--skill', 'web-design-guidelines', '--upstream', up.dir, '--date', '2026-11-04']);
+  assert.equal(r.status, 0, r.stderr);
+  const s = JSON.parse(readFileSync(join(dir, 'sync', 'upstream.json'), 'utf8')).skills[1];
+  assert.deepEqual(s.items, []);
+  assert.equal(s.version, '1.0.0');
+  assert.equal(s.documentedCommit, up.base);
+});
+
+test('frontmatterValue reads top-level and one-level nested keys and strips quotes', () => {
+  const md = '---\nname: x\nversion: top\nmetadata:\n  author: vercel\n  version: "1.0.0"\nother: y\n---\nversion: body\n';
+  assert.equal(frontmatterValue(md, 'version'), 'top');
+  assert.equal(frontmatterValue(md, 'metadata.version'), '1.0.0');
+  assert.equal(frontmatterValue(md, 'metadata.missing'), undefined);
+  assert.equal(frontmatterValue('---\nname: x\n  version: 2\n---\n', 'version'), undefined);
+});
+
+test('validate: a collection needs no skillDir/skillName, a single skill does', () => {
+  const ok = addCollection(makeMarketplace(ALL));
+  assert.equal(run('validate.mjs', ['--repo', ok]).status, 0, run('validate.mjs', ['--repo', ok]).stdout);
+  const r = run('validate.mjs', ['--repo', addSingle(makeMarketplace(ALL), { skillDir: undefined, skillName: undefined })]);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /web-design-guidelines.*skillDir/);
+  assert.match(r.stdout, /web-design-guidelines.*skillName/);
+});
+
+test('validate: a single skill passes with only a README and fails on items or summary files', () => {
+  assert.equal(run('validate.mjs', ['--repo', addSingle(makeMarketplace(ALL), SINGLE_FALLBACKS)]).status, 0);
+  const dir = addSingle(makeMarketplace(ALL), { items: ['review'] }, { summaries: { extra: skillSummary('extra') } });
+  const r = run('validate.mjs', ['--repo', dir]);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /single.*review/);
+  assert.match(r.stdout, /extra\.md/);
+});
+
+test('validate: a collection summary uses the "skill" key and a source ending in <id>/SKILL.md', () => {
+  const dir = addCollection(makeMarketplace(ALL), ['alpha', 'beta', 'gamma']);
+  const docs = join(dir, 'docs', 'tr', 'superpowers');
+  writeFileSync(join(docs, 'alpha.md'), skillSummary('alpha', { key: 'topic' }));
+  writeFileSync(join(docs, 'beta.md'), skillSummary('beta', { source: 'skills/alpha/SKILL.md' }));
+  writeFileSync(join(docs, 'gamma.md'), skillSummary('gamma', { source: 'gamma/SKILL.md' }));
+  const r = run('validate.mjs', ['--repo', dir]);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /alpha\.md.*"skill"/);
+  assert.match(r.stdout, /beta\.md.*source/);
+  assert.doesNotMatch(r.stdout, /gamma/);
+});
+
+test('validate flags a malformed versionFrom or licenseFile', () => {
+  const dir = addSingle(makeMarketplace(ALL), { versionFrom: { file: 'package.json' }, licenseFile: '' });
+  addCollection(dir, ['alpha', 'beta'], { versionFrom: { frontmatter: 'version' } });
+  const r = run('validate.mjs', ['--repo', dir]);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /web-design-guidelines.*versionFrom/);
+  assert.match(r.stdout, /web-design-guidelines.*licenseFile/);
+  assert.match(r.stdout, /superpowers.*versionFrom\.frontmatter/);
+});
+
+test('buildSiteData emits the site contract for every kind, with a call per item', () => {
+  const dir = addSingle(addCollection(addGuideSkill(makeMarketplace(ALL), TOPICS)), { items: ['ignored'] });
+  const data = buildSiteData(dir);
   assert.deepEqual(Object.keys(data), ['generatedAt', 'marketplace', 'skills']);
   assert.deepEqual(data.marketplace, {
     name: 'skills-tr',
@@ -617,18 +926,29 @@ test('buildSiteData emits the site contract for both kinds', () => {
   });
   const keys = ['name', 'kind', 'tagline', 'description', 'author', 'homepage', 'repoUrl', 'license', 'version', 'syncedAt',
     'category', 'installCommand', 'invocation', 'docsUrl', 'overviewHtml', 'items'];
-  const [imp, taste] = data.skills;
-  assert.deepEqual(Object.keys(imp), keys);
-  assert.deepEqual(Object.keys(taste), keys);
+  const [imp, taste, coll, single] = data.skills;
+  for (const s of data.skills) assert.deepEqual(Object.keys(s), keys, s.name);
+  for (const s of [imp, taste, coll]) assert.deepEqual(Object.keys(s.items[0]), ['id', 'title', 'html', 'call'], s.name);
+
   assert.equal(imp.kind, 'commands');
   assert.equal(imp.invocation, '/impeccable <komut>');
+  assert.equal(imp.items.find((i) => i.id === 'polish').call, '/impeccable polish');
   assert.equal(imp.tagline, 'Arayüz tasarımı için kısa bir Türkçe rehber.');
+
   assert.equal(taste.kind, 'guide');
   assert.equal(taste.invocation, '/taste-skill:design-taste-frontend');
   assert.equal(taste.installCommand, '/plugin install taste-skill@skills-tr');
   assert.equal(taste.category, 'design');
   assert.equal(taste.repoUrl, 'https://github.com/Leonxlnx/taste-skill');
   assert.deepEqual(taste.items.map((i) => i.id), TOPICS);
-  assert.deepEqual(Object.keys(taste.items[0]), ['id', 'title', 'html']);
+  assert.deepEqual(taste.items.map((i) => i.call), TOPICS.map(() => '/taste-skill:design-taste-frontend'));
   assert.match(taste.overviewHtml, /<h3>taste-skill<\/h3>[\s\S]*<h4>Bölüm<\/h4>/);
+
+  assert.equal(coll.kind, 'collection');
+  assert.equal(coll.invocation, '/superpowers:<skill-adı>');
+  assert.deepEqual(coll.items.map((i) => i.call), ['/superpowers:alpha', '/superpowers:beta']);
+
+  assert.equal(single.kind, 'single');
+  assert.equal(single.invocation, '/web-design-guidelines:web-design-guidelines');
+  assert.deepEqual(single.items, []);
 });

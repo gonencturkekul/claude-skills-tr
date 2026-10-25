@@ -6,17 +6,19 @@
 // stops a half-done or broken state from going live. It prints every problem
 // it finds (not just the first) so one routine run can fix them all.
 //
-// It understands both skill kinds (see KINDS in lib.mjs): "commands" skills
+// It understands every skill kind (see KINDS in lib.mjs): "commands" skills
 // need one summary per command (frontmatter key `command`), "guide" skills one
 // summary per reference topic (frontmatter key `topic`, `source` fixed to
-// references/<topic>.md).
+// references/<topic>.md), "collection" skills one summary per bundled skill
+// (frontmatter key `skill`, `source` ending in <skill>/SKILL.md), and
+// "single" skills only the README (no item summaries at all).
 //
 // Usage: node sync/validate.mjs [--repo <marketplaceDir>] [--site <siteRepoDir>]
 // Exit codes: 0 = ok, 1 = problems found (listed on stdout).
 import { readdirSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { DEFAULT_REPO, KINDS, expectedSource, readJson, parseFrontmatter, parseArgs, paths, wordCount } from './lib.mjs';
+import { DEFAULT_REPO, KINDS, ONE_SKILL_KINDS, expectedSource, readJson, parseFrontmatter, parseArgs, paths, wordCount } from './lib.mjs';
 
 // Every summary needs these besides its kind's item key (`command`/`topic`).
 const REQUIRED_KEYS = ['title', 'source', 'upstreamCommit'];
@@ -44,13 +46,19 @@ export async function validate(repo, { site } = {}) {
   for (const skill of upstream.skills) {
     // With an unknown kind none of the per-kind rules below can be applied.
     if (!Object.hasOwn(KINDS, skill.kind ?? '')) {
-      problems.push(`${skill.name}: sync/upstream.json "kind" must be ${Object.keys(KINDS).join(' or ')}, got "${skill.kind}"`);
+      problems.push(`${skill.name}: sync/upstream.json "kind" must be one of ${Object.keys(KINDS).join(', ')}, got "${skill.kind}"`);
       continue;
     }
-    // Every script locates upstream files and builds the invocation from these.
-    for (const field of ['skillDir', 'skillName']) {
-      if (typeof skill[field] !== 'string' || !skill[field]) problems.push(`${skill.name}: sync/upstream.json "${field}" is missing`);
+    // Every script locates upstream files and builds the invocation from
+    // these, for kinds that describe one skill folder. A collection finds
+    // its skill folders through the upstream plugin manifest instead, so it
+    // needs neither (see ONE_SKILL_KINDS in lib.mjs).
+    if (ONE_SKILL_KINDS.has(skill.kind)) {
+      for (const field of ['skillDir', 'skillName']) {
+        if (typeof skill[field] !== 'string' || !skill[field]) problems.push(`${skill.name}: sync/upstream.json "${field}" is missing`);
+      }
     }
+    problems.push(...fallbackProblems(skill));
     const itemKey = KINDS[skill.kind].key;
     const docsDir = p.docs(skill.name);
     const readme = join(docsDir, 'README.md');
@@ -67,6 +75,15 @@ export async function validate(repo, { site } = {}) {
     const present = existsSync(docsDir)
       ? readdirSync(docsDir).filter((f) => f.endsWith('.md') && f !== 'README.md').map((f) => f.slice(0, -3))
       : [];
+
+    // A single skill's README is its whole guide. Recorded items or extra
+    // summary files would never reach the page (build-site-data emits no
+    // items for it), so they are leftovers of a wrong kind and must go.
+    if (itemKey === null) {
+      if (expected.size) problems.push(`${skill.name}: kind "single" has no items, but sync/upstream.json lists ${[...expected].join(', ')}`);
+      for (const item of present) problems.push(`${skill.name}: kind "single" has only README.md; remove "${item}.md"`);
+      continue;
+    }
 
     for (const item of expected) {
       if (!present.includes(item)) problems.push(`${skill.name}: missing summary for ${itemKey} "${item}"`);
@@ -87,6 +104,13 @@ export async function validate(repo, { site } = {}) {
       if (source && data.source && data.source !== source) {
         problems.push(`${skill.name}/${item}.md: frontmatter source "${data.source}" must be "${source}"`);
       }
+      // A collection skill's id is its folder name (listCollectionSkills), so
+      // its SKILL.md path, relative to the plugin root, must end in
+      // <id>/SKILL.md. Without a checkout that is all we can check here;
+      // check-upstream reports a source that does not exist upstream.
+      if (skill.kind === 'collection' && data.source && data.source !== `${item}/SKILL.md` && !data.source.endsWith(`/${item}/SKILL.md`)) {
+        problems.push(`${skill.name}/${item}.md: frontmatter source "${data.source}" must be the skill's SKILL.md (.../${item}/SKILL.md)`);
+      }
       const words = wordCount(body);
       if (words < MIN_WORDS || words > MAX_WORDS) {
         problems.push(`${skill.name}/${item}.md: body has ${words} words (allowed ${MIN_WORDS}-${MAX_WORDS})`);
@@ -96,6 +120,27 @@ export async function validate(repo, { site } = {}) {
 
   if (site) problems.push(...(await validateSite(repo, site)));
   return problems;
+}
+
+// The optional fallbacks for upstreams without a plugin manifest (see
+// readVersion and checkLicense in lib.mjs). The scripts reject a malformed
+// value too, but only when they run against a checkout; listing it here
+// catches a typo in sync/upstream.json before the routine depends on it.
+function fallbackProblems(skill) {
+  const out = [];
+  const from = skill.versionFrom;
+  if (from !== undefined) {
+    const fileForm = from && typeof from.file === 'string' && from.file && typeof from.key === 'string' && from.key && from.frontmatter === undefined;
+    const fmForm = from && typeof from.frontmatter === 'string' && /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)?$/.test(from.frontmatter)
+      && from.file === undefined && from.key === undefined;
+    if (!fileForm && !fmForm) out.push(`${skill.name}: sync/upstream.json "versionFrom" must be {"file","key"} or {"frontmatter": "<key>[.<key>]"}`);
+    // The frontmatter form reads the skill's one SKILL.md; a collection has many.
+    else if (fmForm && !ONE_SKILL_KINDS.has(skill.kind)) out.push(`${skill.name}: "versionFrom.frontmatter" needs one SKILL.md, not available for kind "${skill.kind}"`);
+  }
+  if (skill.licenseFile !== undefined && (typeof skill.licenseFile !== 'string' || !skill.licenseFile)) {
+    out.push(`${skill.name}: sync/upstream.json "licenseFile" must be a path relative to the upstream repo root`);
+  }
+  return out;
 }
 
 // The website renders skills/data.json. If it differs from a fresh build of

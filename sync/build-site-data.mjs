@@ -2,15 +2,18 @@
 // Builds the JSON file the website's "AI Skills" page (gonencturkekul.com)
 // renders: the marketplace add command, then one entry per skill with its
 // install command, invocation, Turkish overview and one item per command
-// ("commands" skills) or reference topic ("guide" skills), as HTML.
+// ("commands" skills), reference topic ("guide" skills) or bundled skill
+// ("collection" skills), as HTML. "single" skills have no items: their
+// overview is the whole guide.
 //
 // The output shape is a contract with the site, which renders any number of
 // skills from it, so keep it stable. The test "buildSiteData emits the site
-// contract for both kinds" pins every key:
+// contract for every kind" pins every key:
 //   { generatedAt, marketplace: { name, repoUrl, addCommand },
 //     skills: [{ name, kind, tagline, description, author, homepage, repoUrl,
 //       license, version, syncedAt, category, installCommand, invocation,
-//       docsUrl, overviewHtml, items: [{ id, title, html }] }] }
+//       docsUrl, overviewHtml, items: [{ id, title, html, call }] }] }
+//   `kind` is "commands", "guide", "collection" or "single".
 //
 // Why a generated data file: the routine should update *data*, never edit
 // hand-written HTML. The page stays a static file designed once; adding a new
@@ -107,6 +110,25 @@ export function markdownToHtml(md, ctx = {}) {
   return out.join('\n');
 }
 
+// The skill-level call shown in the page header (see the invocation
+// comment in buildSiteData).
+function invocationOf(skill, kind) {
+  if (kind === 'commands') return `/${skill.skillName} <komut>`;
+  if (kind === 'collection') return `/${skill.name}:<skill-adı>`;
+  return `/${skill.name}:${skill.skillName}`;
+}
+
+// What a user types to use one item, shown next to it on the page so it can
+// be copied. A command is an argument of the skill (`/impeccable polish`); a
+// bundled skill is its own plugin skill (`/superpowers:brainstorming`). A
+// guide topic is not callable by itself: Claude reads the topic file when
+// the skill needs it, so the call is the guide skill's own invocation.
+function callOf(skill, kind, id) {
+  if (kind === 'commands') return `/${skill.skillName} ${id}`;
+  if (kind === 'collection') return `/${skill.name}:${id}`;
+  return `/${skill.name}:${skill.skillName}`;
+}
+
 export function buildSiteData(repo) {
   const p = paths(repo);
   const marketplace = readJson(p.marketplace);
@@ -136,18 +158,22 @@ export function buildSiteData(repo) {
       category: entry.category ?? null,
       installCommand: `/plugin install ${skill.name}@${marketplace.name}`,
       // How a user calls the skill. A commands skill takes a subcommand
-      // (`/impeccable polish`; "<komut>" is Turkish for "<command>"). A guide
-      // skill has none: Claude invokes it by itself, and the explicit form is
-      // Claude Code's plugin skill name, /<plugin>:<SKILL.md name>.
-      invocation: kind === 'commands' ? `/${skill.skillName} <komut>` : `/${skill.name}:${skill.skillName}`,
+      // (`/impeccable polish`; "<komut>" is Turkish for "<command>"). Guide
+      // and single skills have none: Claude invokes them by itself, and the
+      // explicit form is Claude Code's plugin skill name,
+      // /<plugin>:<SKILL.md name>. A collection holds many skills, each
+      // called /<plugin>:<skill> ("<skill-adı>" = "<skill name>").
+      invocation: invocationOf(skill, kind),
       docsUrl: `https://github.com/${GITHUB_REPO}/tree/main/${docsPath}`,
       overviewHtml: markdownToHtml(overview.body, ctx),
-      // One entry per command or topic, in upstream.json order (record-sync
-      // sorts it). `id` is also the in-page anchor suffix #<skill>-<id>, which
-      // is where relative ./<id>.md links in the summaries point.
-      items: (skill.items ?? []).map((id) => {
+      // One entry per command, topic or bundled skill, in upstream.json order
+      // (record-sync sorts it). `id` is also the in-page anchor suffix
+      // #<skill>-<id>, which is where relative ./<id>.md links in the
+      // summaries point. A single skill never has items, whatever
+      // upstream.json says (validate.mjs flags leftovers).
+      items: kind === 'single' ? [] : (skill.items ?? []).map((id) => {
         const { data, body } = parseFrontmatter(readFileSync(join(docsDir, `${id}.md`), 'utf8'));
-        return { id, title: data.title ?? id, html: markdownToHtml(body, ctx) };
+        return { id, title: data.title ?? id, html: markdownToHtml(body, ctx), call: callOf(skill, kind, id) };
       }),
     };
   });

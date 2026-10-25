@@ -13,8 +13,10 @@
 // Output (stdout, JSON):
 //   { skill, kind, changed, headCommit, version, changedFiles, addedItems,
 //     removedItems, missingSources }
-//   Items are commands for kind "commands" (impeccable) and reference topics
-//   (references/<id>.md) for kind "guide" (taste-skill); see KINDS in lib.mjs.
+//   Items are commands for kind "commands" (impeccable), reference topics
+//   (references/<id>.md) for kind "guide" (taste-skill), bundled skills for
+//   kind "collection" (superpowers) and always none for kind "single"
+//   (web-design-guidelines); see KINDS in lib.mjs.
 //   changedFiles are repo-relative paths under the skill's watched folder
 //   (`watchPath` in sync/upstream.json, default: the plugin folder `path`).
 //   missingSources lists summaries ({ item, source }) whose `source` file no
@@ -51,8 +53,9 @@ function walk(root, dir) {
 // Why: a moved or deleted source never shows up as "this summary's file
 // changed", so without this list the summary would silently describe a file
 // that no longer exists. The routine must find where the content went.
-// `source` is relative to the skill folder (the one holding SKILL.md).
-function findMissingSources(repo, skill, skillDir, skip) {
+// `source` is relative to the skill folder (the one holding SKILL.md), or
+// for a collection to the plugin root (`sourceDir` in upstreamFiles).
+function findMissingSources(repo, skill, sourceDir, skip) {
   const docsDir = paths(repo).docs(skill.name);
   if (!existsSync(docsDir)) return [];
   const missing = [];
@@ -60,7 +63,7 @@ function findMissingSources(repo, skill, skillDir, skip) {
     const item = file.slice(0, -3);
     if (skip.has(item)) continue;
     const { data } = parseFrontmatter(readFileSync(join(docsDir, file), 'utf8'));
-    if (data.source && !existsSync(join(skillDir, data.source))) missing.push({ item, source: data.source });
+    if (data.source && !existsSync(join(sourceDir, data.source))) missing.push({ item, source: data.source });
   }
   return missing;
 }
@@ -75,6 +78,10 @@ export function checkUpstream(repo, skillName, checkoutDir, { head } = {}) {
   // whole plugin folder. taste-skill's plugin root is its repo root, which
   // also holds the README, tests and examples, so it watches only the skill
   // folder; otherwise every README edit upstream would trigger a doc pass.
+  // The same goes for collections rooted at the repo root (superpowers
+  // watches skills/). engineering-advanced-skills and pm-skills share one
+  // upstream repo, but each `path` is its own subfolder, so the default
+  // already keeps one skill's changes out of the other's diff.
   const watch = skill.watchPath ?? skill.path;
 
   const headCommit = head ?? git(checkoutDir, 'rev-parse', 'HEAD');
@@ -121,7 +128,7 @@ export function checkUpstream(repo, skillName, checkoutDir, { head } = {}) {
     changedFiles,
     addedItems: items.filter((c) => !recorded.has(c)),
     removedItems,
-    missingSources: findMissingSources(repo, skill, files.skillDir, new Set(removedItems)),
+    missingSources: findMissingSources(repo, skill, files.sourceDir, new Set(removedItems)),
   };
 }
 

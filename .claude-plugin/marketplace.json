@@ -43,6 +43,155 @@
         "source": "github",
         "repo": "Leonxlnx/taste-skill"
       }
+    },
+    {
+      "name": "ui-ux-pro-max",
+      "description": "Arayüz ve deneyim tasarımı için aranabilir bilgi bankası: stiller, renk paletleri, font eşleşmeleri, grafik türleri ve birçok teknoloji için UX kuralları, yedi skill halinde. Yazar: nextlevelbuilder. Türkçe rehber: https://gonencturkekul.com/skills.html",
+      "author": {
+        "name": "nextlevelbuilder"
+      },
+      "homepage": "https://uupm.cc",
+      "repository": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+      "license": "MIT",
+      "category": "design",
+      "tags": ["design", "ui", "ux", "design-system", "turkish-docs"],
+      "source": {
+        "source": "github",
+        "repo": "nextlevelbuilder/ui-ux-pro-max-skill"
+      }
+    },
+    {
+      "name": "web-design-guidelines",
+      "description": "Arayüz kodunu Vercel'in Web Interface Guidelines kurallarına göre denetler ve bulguları dosya ve satır numarasıyla listeler. Yazar: Vercel. Türkçe rehber: https://gonencturkekul.com/skills.html",
+      "author": {
+        "name": "Vercel"
+      },
+      "homepage": "https://github.com/vercel-labs/agent-skills/tree/main/skills/web-design-guidelines",
+      "repository": "https://github.com/vercel-labs/agent-skills",
+      "license": "MIT",
+      "category": "design",
+      "tags": ["design", "accessibility", "ux", "review", "turkish-docs"],
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/vercel-labs/agent-skills.git",
+        "path": "skills"
+      },
+      "strict": false,
+      "skills": [
+        "./web-design-guidelines"
+      ]
+    },
+    {
+      "name": "archify",
+      "description": "Mimari, iş akışı, sıralama, veri akışı ve durum diyagramlarını açık ve koyu temalı, dışa aktarılabilir tek HTML dosyası olarak çizer; Mermaid girdisini de kabul eder. Yazar: tt-a1i. Türkçe rehber: https://gonencturkekul.com/skills.html",
+      "author": {
+        "name": "tt-a1i"
+      },
+      "homepage": "https://github.com/tt-a1i/archify",
+      "repository": "https://github.com/tt-a1i/archify",
+      "license": "MIT",
+      "category": "development",
+      "tags": ["diagrams", "architecture", "mermaid", "documentation", "turkish-docs"],
+      "source": {
+        "source": "github",
+        "repo": "tt-a1i/archify"
+      },
+      "strict": false,
+      "skills": [
+        "./archify"
+      ]
+    },
+    {
+      "name": "playwright-cli",
+      "description": "playwright-cli ile tarayıcıyı komut satırından yönetir: sayfa gezme, form doldurma, ekran görüntüsü, ağ isteklerini taklit etme ve Playwright testleri. Yazar: Microsoft. Türkçe rehber: https://gonencturkekul.com/skills.html",
+      "author": {
+        "name": "Microsoft"
+      },
+      "homepage": "https://github.com/microsoft/playwright-cli",
+      "repository": "https://github.com/microsoft/playwright-cli",
+      "license": "Apache-2.0",
+      "category": "testing",
+      "tags": ["testing", "browser", "automation", "playwright", "turkish-docs"],
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/microsoft/playwright-cli.git",
+        "path": "skills"
+      },
+      "strict": false,
+      "skills": [
+        "./playwright-cli"
+      ]
+    },
+    {
+      "name": "superpowers",
+      "description": "Yazılım geliştirme için skill kütüphanesi: beyin fırtınası, plan yazma, test odaklı geliştirme, sistematik hata ayıklama ve kod incelemesi gibi iş akışları. Yazar: Jesse Vincent. Türkçe rehber: https://gonencturkekul.com/skills.html",
+      "author": {
+        "name": "Jesse Vincent",
+        "email": "jesse@fsck.com"
+      },
+      "homepage": "https://github.com/obra/superpowers",
+      "repository": "https://github.com/obra/superpowers",
+      "license": "MIT",
+      "category": "development",
+      "tags": ["development", "tdd", "debugging", "workflows", "turkish-docs"],
+      "source": {
+        "source": "github",
+        "repo": "obra/superpowers"
+      }
+    },
+    {
+      "name": "engineering-advanced-skills",
+      "description": "İleri düzey mühendislik skill'leri: ajan ve RAG tasarımı, veritabanı ve API tasarımı, CI/CD, gözlemlenebilirlik, bağımlılık denetimi, sır yönetimi ve sürüm öncesi kontroller. Yazar: Alireza Rezvani. Türkçe rehber: https://gonencturkekul.com/skills.html",
+      "author": {
+        "name": "Alireza Rezvani",
+        "url": "https://alirezarezvani.com"
+      },
+      "homepage": "https://github.com/alirezarezvani/claude-skills/tree/main/engineering",
+      "repository": "https://github.com/alirezarezvani/claude-skills",
+      "license": "MIT",
+      "category": "development",
+      "tags": ["development", "architecture", "devops", "agents", "turkish-docs"],
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/alirezarezvani/claude-skills.git",
+        "path": "engineering"
+      }
+    },
+    {
+      "name": "pm-skills",
+      "description": "Proje yönetimi skill'leri: kıdemli proje yöneticisi, scrum master, Jira, Confluence ve Atlassian yönetimi, toplantı analizi ve ekip iletişimi. Yazar: Alireza Rezvani. Türkçe rehber: https://gonencturkekul.com/skills.html",
+      "author": {
+        "name": "Alireza Rezvani",
+        "url": "https://alirezarezvani.com"
+      },
+      "homepage": "https://github.com/alirezarezvani/claude-skills/tree/main/project-management",
+      "repository": "https://github.com/alirezarezvani/claude-skills",
+      "license": "MIT",
+      "category": "productivity",
+      "tags": ["project-management", "agile", "jira", "confluence", "turkish-docs"],
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/alirezarezvani/claude-skills.git",
+        "path": "project-management"
+      }
+    },
+    {
+      "name": "hyperframes",
+      "description": "HTML yazarak video üretmek için HyperFrames skill'leri: kompozisyon, animasyon, CLI, bileşen kayıt defteri, medya, Figma, slayt gösterisi ve Remotion dönüşümü. Yazar: HeyGen. Türkçe rehber: https://gonencturkekul.com/skills.html",
+      "author": {
+        "name": "HeyGen",
+        "email": "hyperframes@heygen.com",
+        "url": "https://hyperframes.heygen.com"
+      },
+      "homepage": "https://hyperframes.heygen.com",
+      "repository": "https://github.com/heygen-com/hyperframes",
+      "license": "Apache-2.0",
+      "category": "media",
+      "tags": ["video", "animation", "html", "media", "turkish-docs"],
+      "source": {
+        "source": "github",
+        "repo": "heygen-com/hyperframes"
+      }
     }
   ]
 }

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Records in sync/upstream.json that our Turkish docs now match a given
 // upstream commit: the commit SHA, the plugin version, the item list
-// (commands, or reference topics for a "guide" skill) and the date.
+// (commands, reference topics for a "guide" skill, bundled skills for a
+// "collection", always [] for a "single" skill) and the date.
 //
 // Why: the next run diffs from `documentedCommit`, validate.mjs checks
 // summaries against `items`, and the website shows `version`/`syncedAt`.
@@ -30,8 +31,9 @@ export function recordSync(repo, skillName, checkoutDir, date, { head } = {}) {
   if (!skill) throw new Error(`skill "${skillName}" not found in sync/upstream.json`);
   // Same reader and checks as check-upstream: the version comes from
   // plugin.json, or from the upstream marketplace.json entry when the plugin
-  // has none (taste-skill). If upstream changed shape since the check, this
-  // throws and nothing is recorded.
+  // has none (taste-skill), or from the place `versionFrom` names for a plain
+  // skill repo without any manifest (archify, playwright-cli). If upstream
+  // changed shape since the check, this throws and nothing is recorded.
   const { items, version } = readUpstream(checkoutDir, skill);
   skill.documentedCommit = head ?? execFileSync('git', ['-C', checkoutDir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   skill.version = version ?? skill.version;
